@@ -1,3 +1,6 @@
 node_modules/
 .env
+token.json
 server.log
+config.js
+.DS_Store

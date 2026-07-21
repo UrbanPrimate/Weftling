@@ -51,8 +51,9 @@ product name in as few places as possible — the header, the `<title>`, the man
   included entries as invoiced.
 - **Timesheet** — a standalone document generator for 1099 contractors, entirely local.
 - **Settings** — defaults (rate, increment, rounding, terms, markup, currency symbol, date
-  format), accounting export fields (account code, tax type used by the Xero-format CSV),
-  backup/export, and reset data.
+  format), accounting software (optional: pick Xero, QuickBooks Online, or Neither/not sure,
+  which shows only the relevant export fields — revenue account code + sales tax rate for Xero,
+  an optional Product/Service name for QuickBooks), backup/export, and reset data.
 
 ## Billing logic (get this exactly right)
 - `billedMinutes(min, inc, billable)`: if not billable or min<=0 → 0. Otherwise round to the
@@ -72,9 +73,11 @@ Provide a JSON "Export all data" backup button in Settings.
 Two formats, generated client-side from the same bundled line items, one row per line item:
 - **Xero-format**: `ContactName, EmailAddress, InvoiceNumber, Reference, InvoiceDate, DueDate,
   Description, Quantity, UnitAmount, AccountCode, TaxType`. `AccountCode`/`TaxType` come from
-  Settings → Accounting export fields.
-- **QuickBooks-format**: `Customer, Invoice Date, Due Date, Invoice No, Item(Product/Service),
-  Item Description, Item Quantity, Item Rate, Item Amount`.
+  Settings → Accounting software (optional), when Xero is selected.
+- **QuickBooks-format**: `InvoiceNo, Customer, InvoiceDate, DueDate, ItemDescription,
+  Product/Service, Quantity, Rate, Amount`, dates as MM/DD/YYYY. `Product/Service` comes from
+  Settings → Accounting software (optional), when QuickBooks Online is selected (optional —
+  QuickBooks also lets you map columns during import).
 
 Both use `\r\n` line endings + a UTF-8 BOM; no currency symbols; warn the user not to open the
 Xero-format file in Excel before importing (Excel mangles dates). After either download, ask the

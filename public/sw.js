@@ -3,10 +3,13 @@
 // Weftly service worker.
 // - Network-first for the HTML shell (so a running server always wins).
 // - Cache-first for static assets (manifest, icons).
-// - Never touches /api, /connect, /callback — those must always hit the
-//   live server and are never cached, connected or offline.
+// - Never touches /api, /connect, /callback, /config.js — those must always
+//   hit the live server and are never cached. /config.js in particular holds
+//   per-environment Supabase settings that can change without any app-version
+//   bump, so a stale cached copy would silently keep pointing at the old
+//   values — always fetch it fresh.
 
-const CACHE_NAME = 'weftly-v1';
+const CACHE_NAME = 'weftly-v2';
 const PRECACHE = [
   '/',
   '/manifest.webmanifest',
@@ -35,7 +38,8 @@ function isBypassed(url) {
   return (
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/connect') ||
-    url.pathname.startsWith('/callback')
+    url.pathname.startsWith('/callback') ||
+    url.pathname === '/config.js'
   );
 }
 

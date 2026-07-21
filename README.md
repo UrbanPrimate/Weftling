@@ -46,11 +46,13 @@ different port.
 
 **Xero-format** matches Xero's bulk invoice import columns (`ContactName, EmailAddress,
 InvoiceNumber, Reference, InvoiceDate, DueDate, Description, Quantity, UnitAmount, AccountCode,
-TaxType`). Set the account code and tax type in **Settings → Accounting export fields** first.
+TaxType`). Set the revenue account code and sales tax rate in **Settings → Accounting software
+(optional)** first (pick "Xero" from the dropdown to reveal those fields).
 
-**QuickBooks-format** matches QuickBooks Online's invoice import columns (`Customer, Invoice
-Date, Due Date, Invoice No, Item(Product/Service), Item Description, Item Quantity, Item Rate,
-Item Amount`).
+**QuickBooks-format** matches QuickBooks Online's invoice import columns (`InvoiceNo, Customer,
+InvoiceDate, DueDate, ItemDescription, Product/Service, Quantity, Rate, Amount`). Optionally set a
+Product/Service name in **Settings → Accounting software (optional)** (pick "QuickBooks Online")
+to pre-fill that column; QuickBooks also lets you map columns during import if you leave it blank.
 
 Both formats: one row per line item, UTF-8 with a BOM and `\r\n` line endings, no currency
 symbols. **Don't open either file in Excel before importing** — Excel silently reformats date

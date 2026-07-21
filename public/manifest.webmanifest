@@ -1,6 +1,6 @@
 {
-  "name": "Weftly",
-  "short_name": "Weftly",
+  "name": "Weftling",
+  "short_name": "Weftling",
   "description": "Local-first time & materials tracker that bills through Xero.",
   "start_url": "/",
   "scope": "/",

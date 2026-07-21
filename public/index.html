@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Weftly</title>
+<title>Weftling</title>
 <meta name="description" content="Local-first time &amp; materials tracker with CSV invoice export." />
 
 <!-- PWA -->
@@ -14,7 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Weftly" />
+<meta name="apple-mobile-web-app-title" content="Weftling" />
 
 <style>
   :root {
@@ -77,6 +77,13 @@
     font-weight: 700;
     letter-spacing: 0.02em;
     font-size: 17px;
+  }
+  header.app-header .brand-sub {
+    font-weight: 400;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    color: rgba(255,255,255,0.6);
+    margin-top: 1px;
   }
 
   nav.tabs {
@@ -208,6 +215,24 @@
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
   .field-invalid { border-color: var(--danger); background: var(--danger-bg); }
 
+  .help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    font-style: normal;
+    cursor: help;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .help-icon:hover, .help-icon:focus { background: var(--teal); color: #fff; outline: none; }
+
   button.btn {
     appearance: none;
     border: 1px solid var(--ink);
@@ -277,6 +302,55 @@
 
   footer.hint { text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 18px 12px 4px; }
 
+  /* Auth screen — shown instead of the app until a Supabase session exists */
+  .auth-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 340px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .auth-card .brand {
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .auth-card .brand-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  .auth-card .sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .auth-mode-toggle {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 14px;
+  }
+  .auth-mode-toggle button {
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--teal);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+  }
+
   @media (max-width: 480px) {
     header.app-header .brand { font-size: 15px; }
     .stat .value { font-size: 19px; }
@@ -321,8 +395,43 @@
 </head>
 <body>
 
+<!-- AUTH SCREEN — the only thing visible until Supabase reports a signed-in session -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="brand">Weftling</div>
+    <div class="brand-sub">a Fabbric tool</div>
+    <div class="sub" id="authSubtitle">Sign in to your account</div>
+    <div id="authBanner"></div>
+    <form id="authForm">
+      <div class="field">
+        <label for="authEmail">Email</label>
+        <input type="email" id="authEmail" required autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="authPassword">Password</label>
+        <input type="password" id="authPassword" required autocomplete="current-password" minlength="6" />
+      </div>
+      <button type="submit" class="btn primary" id="authSubmitBtn" style="width:100%;">Sign in</button>
+    </form>
+    <div class="auth-mode-toggle">
+      <span id="authToggleText">Don't have an account?</span>
+      <button type="button" id="authToggleBtn">Sign up</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP SHELL — hidden until authScreen hands off after a successful sign-in -->
+<div id="appShell" style="display:none;">
+
 <header class="app-header">
-  <div class="brand">Weftly</div>
+  <div>
+    <div class="brand">Weftling</div>
+    <div class="brand-sub">a Fabbric tool</div>
+  </div>
+  <div class="btn-row">
+    <span class="muted" id="authUserEmail" style="font-size:12px;"></span>
+    <button type="button" class="btn secondary small" id="logoutBtn">Log out</button>
+  </div>
 </header>
 
 <nav class="tabs" id="tabNav">
@@ -554,7 +663,7 @@
           <label for="matBillable">Billable</label>
         </div>
         <div class="btn-row">
-          <button type="submit" class="btn primary">Add material</button>
+          <button type="submit" class="btn primary" id="matSubmitBtn">Add material</button>
           <button type="button" class="btn secondary" id="matCancelEdit" style="display:none;">Cancel edit</button>
         </div>
       </form>
@@ -608,10 +717,49 @@
           </div>
         </div>
         <div class="btn-row">
-          <button type="submit" class="btn primary">Save client</button>
+          <button type="submit" class="btn primary" id="clientSubmitBtn">Save client</button>
           <button type="button" class="btn secondary" id="clientCancelEdit" style="display:none;">Cancel edit</button>
         </div>
       </form>
+    </div>
+
+    <div class="card">
+      <h2>Import customers</h2>
+      <p class="muted" style="font-size:12.5px;">Upload a customer list exported from Xero (Contacts → Export) or QuickBooks (Customers → Export). Accepts .csv or .xlsx. The file is only read in your browser — nothing is sent anywhere except straight into your own account.</p>
+      <div class="field">
+        <label for="importClientsFile">File</label>
+        <input type="file" id="importClientsFile" accept=".csv,.xlsx" />
+      </div>
+      <p class="muted" id="importClientsStatus" style="font-size:12.5px;"></p>
+
+      <div id="importClientsMapping" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12.5px;">We couldn't automatically recognize the customer name column in this file — pick it below.</p>
+        <div class="row">
+          <div class="field">
+            <label for="importMapName">Customer name column</label>
+            <select id="importMapName"></select>
+          </div>
+          <div class="field">
+            <label for="importMapEmail">Email column (optional)</label>
+            <select id="importMapEmail"></select>
+          </div>
+        </div>
+        <button type="button" class="btn secondary small" id="importMapContinue">Continue</button>
+      </div>
+
+      <div id="importClientsPreview" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12.5px;" id="importClientsSummary"></p>
+        <div class="table-scroll" style="max-height:320px; overflow-y:auto;">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
+            <tbody id="importClientsRows"></tbody>
+          </table>
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button type="button" class="btn primary" id="importClientsConfirm">Import</button>
+          <button type="button" class="btn secondary" id="importClientsCancel">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -808,7 +956,7 @@
             </select>
           </div>
         </div>
-        <button type="submit" class="btn primary">Save defaults</button>
+        <button type="submit" class="btn primary" id="settingsSubmitBtn">Save defaults</button>
       </form>
     </div>
 
@@ -847,24 +995,45 @@
           <label for="ctNote">Note (optional)</label>
           <textarea id="ctNote" rows="2"></textarea>
         </div>
-        <button type="submit" class="btn primary">Save contractor details</button>
+        <button type="submit" class="btn primary" id="contractorSubmitBtn">Save contractor details</button>
       </form>
     </div>
 
     <div class="card">
-      <h2>Accounting export fields</h2>
-      <div class="row">
-        <div class="field">
-          <label for="setAccountCode">Account code (for accounting export)</label>
-          <input type="text" id="setAccountCode" placeholder="e.g. 200" />
-        </div>
-        <div class="field">
-          <label for="setTaxType">Tax type (for accounting export)</label>
-          <input type="text" id="setTaxType" placeholder="e.g. OUTPUT2" />
+      <h2>Accounting software (optional)</h2>
+      <p class="muted" style="font-size:12.5px; margin-top:-6px;">If you import invoices into Xero or QuickBooks, these settings pre-fill the right fields so you don't have to map them each time. Leave blank if you don't use these — your CSV still works.</p>
+
+      <div class="field">
+        <label for="setAccountingSoftware">Which accounting software do you use?</label>
+        <select id="setAccountingSoftware">
+          <option value="">Neither / not sure</option>
+          <option value="xero">Xero</option>
+          <option value="quickbooks">QuickBooks Online</option>
+        </select>
+      </div>
+
+      <div id="xeroExportFields" style="display:none;">
+        <div class="row">
+          <div class="field">
+            <label for="setAccountCode">Revenue account code <span class="help-icon" tabindex="0" title="The income account new invoices should post to in Xero (e.g. 200 – Sales). Find it in Xero under Accounting → Chart of accounts. Xero requires this or it rejects the import.">?</span></label>
+            <input type="text" id="setAccountCode" placeholder="e.g. 200" />
+          </div>
+          <div class="field">
+            <label for="setTaxType">Sales tax rate <span class="help-icon" tabindex="0" title="The tax rate name exactly as it appears in your Xero organisation (e.g. 'Tax on Sales', or 'Tax Exempt' if you don't charge tax). Must match Xero exactly.">?</span></label>
+            <input type="text" id="setTaxType" placeholder="e.g. Tax on Sales" />
+          </div>
         </div>
       </div>
+
+      <div id="qbExportFields" style="display:none;">
+        <div class="field">
+          <label for="setQbProductService">Product/Service name <span class="help-icon" tabindex="0" title="Optional. The product or service these invoices map to in QuickBooks (e.g. 'Consulting'). QuickBooks lets you map columns during import, so you can also leave this blank.">?</span></label>
+          <input type="text" id="setQbProductService" placeholder="e.g. Consulting" />
+        </div>
+        <p class="muted" style="font-size:12px;">QuickBooks matches customers by name, so make sure client names here match your QuickBooks customers.</p>
+      </div>
+
       <button type="button" class="btn secondary small" id="saveExportFields">Save export fields</button>
-      <p class="muted" style="font-size:12px;">Used on the Xero-format CSV export for every line item.</p>
     </div>
 
     <div class="card">
@@ -877,8 +1046,7 @@
           <input type="file" id="importDataInput" accept="application/json" style="display:none;" />
         </label>
       </div>
-      <p class="muted" style="font-size:12px;">CSV exports one readable file each for Time, Materials, Clients, and Invoices — for opening in Excel/Sheets, not for re-import. The full JSON backup is the actual restore file; use "Import backup" to restore it.</p>
-      <p class="muted" style="font-size:12px;">Storage tier in use: <span id="storageModeText">—</span></p>
+      <p class="muted" style="font-size:12px;">CSV exports one readable file each for Time, Materials, and Clients — for opening in Excel/Sheets, not for re-import. The full JSON backup is the actual restore file; use "Import backup" to restore it.</p>
     </div>
 
     <div class="card">
@@ -916,11 +1084,51 @@
     </div>
   </section>
 
-  <footer class="hint">Weftly · time &amp; materials, exported for your accounting software</footer>
+  <footer class="hint">Weftling · time &amp; materials, exported for your accounting software</footer>
 </main>
+
+</div><!-- /#appShell -->
+
+<!-- Supabase client (CDN, no build step) + local, untracked project config -->
+<!-- Pinned to an exact version + verified SRI hash, rather than the "@2" moving
+     tag — a new release (or a compromised/typosquatted CDN response) can no
+     longer run silently. Re-pin deliberately when you choose to upgrade:
+     check the new version's hash the same way (download the file, `openssl
+     dgst -sha384 -binary <file> | openssl base64 -A`), don't just bump the
+     version number and hope. -->
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.7/dist/umd/supabase.js"
+  integrity="sha384-hazsLVND17GNLVdtV19te6qbFT2YuLgl8SamcF+QR5eIOC+W4dGKrUNMxU1jH1zD"
+  crossorigin="anonymous"
+></script>
+<script src="/config.js"></script>
 
 <script>
 'use strict';
+
+/* =========================================================================
+   Supabase client — reads the project URL + anon key from config.js
+   (window.SUPABASE_CONFIG, loaded above via <script src="/config.js">, itself
+   copied from config.example.js and gitignored). Anything that needs to talk
+   to Supabase later (auth, data reads/writes) goes through this one client.
+   ========================================================================= */
+const SupabaseClient = (() => {
+  if (!window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.url || !window.SUPABASE_CONFIG.anonKey
+      || window.SUPABASE_CONFIG.url.includes('YOUR-PROJECT-REF')) {
+    console.error(
+      'Supabase is not configured yet. Edit public/config.js with your project URL and anon key '
+      + '(Supabase dashboard -> Project Settings -> API).'
+    );
+    return null;
+  }
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    console.error('Supabase JS client failed to load from the CDN — check your network connection.');
+    return null;
+  }
+  const client = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey);
+  console.log('Supabase client initialized.');
+  return client;
+})();
 
 /* =========================================================================
    Billing math — mirrors lib/billing.js exactly (sanity checks documented
@@ -944,51 +1152,18 @@ const Billing = {
 };
 
 /* =========================================================================
-   Storage — window.storage (Claude artifact) > localStorage > in-memory.
-   Values are always JSON-encoded so all three tiers behave identically.
+   Legacy local storage cleanup — Weftly used to keep everything in one
+   localStorage blob under this key. Data now lives in Supabase; this just
+   makes sure an old blob from before the migration can never resurface and
+   get confused for real data (nothing reads this key anymore either way,
+   but leaving stale app data sitting around is bad hygiene regardless).
    ========================================================================= */
-const Storage = {
-  mode: 'memory',
-  mem: {},
-  async init() {
-    if (typeof window.storage === 'object' && window.storage &&
-        typeof window.storage.get === 'function' && typeof window.storage.set === 'function') {
-      this.mode = 'window.storage';
-      return;
-    }
-    try {
-      const testKey = '__weftly_probe__';
-      window.localStorage.setItem(testKey, '1');
-      window.localStorage.removeItem(testKey);
-      this.mode = 'localStorage';
-    } catch (e) {
-      this.mode = 'memory';
-    }
-  },
-  async get(key) {
-    try {
-      if (this.mode === 'window.storage') {
-        const raw = await window.storage.get(key);
-        return raw == null ? undefined : JSON.parse(raw);
-      }
-      if (this.mode === 'localStorage') {
-        const raw = window.localStorage.getItem(key);
-        return raw == null ? undefined : JSON.parse(raw);
-      }
-    } catch (e) { console.error('Storage.get failed', e); }
-    return this.mem[key];
-  },
-  async set(key, value) {
-    const encoded = JSON.stringify(value);
-    try {
-      if (this.mode === 'window.storage') { await window.storage.set(key, encoded); return; }
-      if (this.mode === 'localStorage') { window.localStorage.setItem(key, encoded); return; }
-    } catch (e) { console.error('Storage.set failed', e); }
-    this.mem[key] = value;
-  },
-};
-
-const DATA_KEY = 'weftly:data:v1';
+const LEGACY_LOCAL_DATA_KEY = 'weftly:data:v1';
+function clearLegacyLocalStorage() {
+  try {
+    window.localStorage.removeItem(LEGACY_LOCAL_DATA_KEY);
+  } catch (e) { /* localStorage unavailable — nothing to clear */ }
+}
 
 function defaultState() {
   return {
@@ -1003,6 +1178,8 @@ function defaultState() {
       dateFormat: 'MM/DD/YYYY',
       xeroAccountCode: '',
       xeroTaxType: '',
+      accountingSoftware: '',
+      qbProductService: '',
       overviewPeriod: { mode: 'month', from: null, to: null },
       timesheetPeriod: { mode: 'month', from: null, to: null },
       timeEntryMode: 'duration',
@@ -1030,22 +1207,280 @@ function uid() {
   return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-async function persist() {
-  await Storage.set(DATA_KEY, STATE);
+/* =========================================================================
+   Data layer — Supabase-backed. STATE keeps exactly the same shape the rest
+   of the app already expects (camelCase fields, e.g. t.clientId, t.date);
+   everything below is the only place that knows the database uses different
+   (snake_case) column names, and the only place that talks to Supabase at
+   all. Nothing else in the app needed to change because of that.
+   ========================================================================= */
+
+let CURRENT_USER = null; // set by showApp(), cleared by showAuthScreen() — see Auth section below
+
+/** Every write goes through this first — refuses to fire a request with a null user_id rather than let one slip through. */
+function requireUser() {
+  if (!CURRENT_USER) throw new Error('Not signed in — reload and sign in again.');
+  return CURRENT_USER;
 }
 
-async function loadState() {
-  const raw = await Storage.get(DATA_KEY);
-  if (raw && typeof raw === 'object') {
-    const d = defaultState();
-    STATE = {
-      settings: Object.assign(d.settings, raw.settings || {}),
-      clients: Array.isArray(raw.clients) ? raw.clients : [],
-      time: Array.isArray(raw.time) ? raw.time : [],
-      materials: Array.isArray(raw.materials) ? raw.materials : [],
-      timesheetCounter: Number.isFinite(raw.timesheetCounter) ? raw.timesheetCounter : 0,
+// ---- field mapping: JS camelCase (STATE, as before) <-> Postgres snake_case (the tables from Step 3) ----
+
+function clientToRow(c) {
+  return { id: c.id, name: c.name, email: c.email, rate: c.rate, increment: c.increment };
+}
+function clientFromRow(r) {
+  return { id: r.id, name: r.name, email: r.email, rate: r.rate == null ? null : Number(r.rate), increment: r.increment };
+}
+
+function timeToRow(t) {
+  return {
+    id: t.id,
+    client_id: t.clientId,
+    entry_date: t.date,
+    description: t.description,
+    minutes: t.minutes,
+    rate: t.rate,
+    increment: t.increment,
+    billable: t.billable,
+    entry_mode: t.entryMode,
+    clock_start: t.clockStart,
+    clock_end: t.clockEnd,
+    clock_break_minutes: t.clockBreakMinutes,
+    invoiced: t.invoiced,
+  };
+}
+function timeFromRow(r) {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    date: r.entry_date,
+    description: r.description,
+    minutes: r.minutes,
+    rate: Number(r.rate),
+    increment: r.increment,
+    billable: r.billable,
+    entryMode: r.entry_mode,
+    clockStart: r.clock_start,
+    clockEnd: r.clock_end,
+    clockBreakMinutes: r.clock_break_minutes,
+    invoiced: r.invoiced,
+  };
+}
+
+function materialToRow(m) {
+  return {
+    id: m.id,
+    client_id: m.clientId,
+    entry_date: m.date,
+    description: m.description,
+    qty: m.qty,
+    unit_cost: m.unitCost,
+    markup_pct: m.markupPct,
+    billable: m.billable,
+    invoiced: m.invoiced,
+  };
+}
+function materialFromRow(r) {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    date: r.entry_date,
+    description: r.description,
+    qty: Number(r.qty),
+    unitCost: Number(r.unit_cost),
+    markupPct: Number(r.markup_pct),
+    billable: r.billable,
+    invoiced: r.invoiced,
+  };
+}
+
+/** timesheetCounter lives in the settings row (timesheet_counter column) but as a STATE sibling, not nested inside STATE.settings — pass it separately. */
+function settingsToRow(s, timesheetCounter) {
+  const row = {
+    default_rate: s.defaultRate,
+    default_increment: s.defaultIncrement,
+    rounding_mode: s.roundingMode,
+    min_one_increment: s.minOneIncrement,
+    terms_days: s.termsDays,
+    default_markup: s.defaultMarkup,
+    currency_symbol: s.currencySymbol,
+    date_format: s.dateFormat,
+    xero_account_code: s.xeroAccountCode,
+    xero_tax_type: s.xeroTaxType,
+    accounting_software: s.accountingSoftware,
+    qb_product_service: s.qbProductService,
+    time_entry_mode: s.timeEntryMode,
+    overview_period: s.overviewPeriod,
+    timesheet_period: s.timesheetPeriod,
+    contractor: s.contractor,
+  };
+  if (timesheetCounter !== undefined) row.timesheet_counter = timesheetCounter;
+  return row;
+}
+function settingsFromRow(row, defaults) {
+  return {
+    ...defaults,
+    defaultRate: Number(row.default_rate),
+    defaultIncrement: row.default_increment,
+    roundingMode: row.rounding_mode,
+    minOneIncrement: row.min_one_increment,
+    termsDays: row.terms_days,
+    defaultMarkup: Number(row.default_markup),
+    currencySymbol: row.currency_symbol,
+    dateFormat: row.date_format,
+    xeroAccountCode: row.xero_account_code,
+    xeroTaxType: row.xero_tax_type,
+    accountingSoftware: row.accounting_software || '',
+    qbProductService: row.qb_product_service || '',
+    timeEntryMode: row.time_entry_mode,
+    overviewPeriod: row.overview_period || defaults.overviewPeriod,
+    timesheetPeriod: row.timesheet_period || defaults.timesheetPeriod,
+    contractor: (row.contractor && Object.keys(row.contractor).length) ? row.contractor : defaults.contractor,
+  };
+}
+
+/**
+ * All Supabase table access lives here. Every read below is explicitly
+ * filtered by user_id even though Step 4's RLS policies enforce the same
+ * restriction at the database level — this filter protects this app's own
+ * queries the moment RLS isn't (yet, or ever) in place. It is NOT a
+ * substitute for RLS: anything calling Supabase's API directly, bypassing
+ * this app's code entirely, wouldn't have this filter at all. Every insert
+ * deliberately leaves user_id unset — the schema's `default auth.uid()`
+ * fills it in from the authenticated request itself, so the client never
+ * gets a chance to send (or spoof) a user_id at all.
+ */
+const Db = {
+  async loadAll(userId) {
+    const [clientsRes, timeRes, materialsRes, settingsRes] = await Promise.all([
+      SupabaseClient.from('clients').select('*').eq('user_id', userId).order('created_at'),
+      SupabaseClient.from('time_entries').select('*').eq('user_id', userId).order('created_at'),
+      SupabaseClient.from('materials').select('*').eq('user_id', userId).order('created_at'),
+      SupabaseClient.from('settings').select('*').eq('user_id', userId).maybeSingle(),
+    ]);
+    for (const res of [clientsRes, timeRes, materialsRes, settingsRes]) {
+      if (res.error) throw res.error;
+    }
+    return {
+      clients: clientsRes.data.map(clientFromRow),
+      time: timeRes.data.map(timeFromRow),
+      materials: materialsRes.data.map(materialFromRow),
+      settingsRow: settingsRes.data || null,
     };
-  } else {
+  },
+
+  async insertTime(entry) {
+    requireUser();
+    const { error } = await SupabaseClient.from('time_entries').insert(timeToRow(entry));
+    if (error) throw error;
+  },
+  async updateTime(entry) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('time_entries').update(timeToRow(entry)).eq('id', entry.id).eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async deleteTime(id) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('time_entries').delete().eq('id', id).eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async deleteAllTime() {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('time_entries').delete().eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async insertManyTime(entries) {
+    requireUser();
+    const { error } = await SupabaseClient.from('time_entries').insert(entries.map(timeToRow));
+    if (error) throw error;
+  },
+
+  async insertMaterial(entry) {
+    requireUser();
+    const { error } = await SupabaseClient.from('materials').insert(materialToRow(entry));
+    if (error) throw error;
+  },
+  async updateMaterial(entry) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('materials').update(materialToRow(entry)).eq('id', entry.id).eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async deleteMaterial(id) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('materials').delete().eq('id', id).eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async deleteAllMaterials() {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('materials').delete().eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async insertManyMaterials(entries) {
+    requireUser();
+    const { error } = await SupabaseClient.from('materials').insert(entries.map(materialToRow));
+    if (error) throw error;
+  },
+
+  async insertClient(entry) {
+    requireUser();
+    const { error } = await SupabaseClient.from('clients').insert(clientToRow(entry));
+    if (error) throw error;
+  },
+  async updateClient(entry) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('clients').update(clientToRow(entry)).eq('id', entry.id).eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async deleteClient(id) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('clients').delete().eq('id', id).eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async deleteAllClients() {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('clients').delete().eq('user_id', user.id);
+    if (error) throw error;
+  },
+  async insertManyClients(entries) {
+    requireUser();
+    const { error } = await SupabaseClient.from('clients').insert(entries.map(clientToRow));
+    if (error) throw error;
+  },
+
+  /** Upsert keyed on the settings table's user_id primary key — a partial row only ever touches the columns it names. */
+  async saveSettings(partialRow) {
+    const user = requireUser();
+    const { error } = await SupabaseClient.from('settings').upsert({ user_id: user.id, ...partialRow });
+    if (error) throw error;
+  },
+};
+
+/**
+ * Loads the signed-in user's rows from Supabase into STATE. Falls back to an
+ * empty default state (with a visible error banner) if the load fails,
+ * rather than risk showing stale or wrong data.
+ */
+async function loadState() {
+  const d = defaultState();
+  try {
+    const user = requireUser();
+    const loaded = await Db.loadAll(user.id);
+    STATE = {
+      settings: loaded.settingsRow ? settingsFromRow(loaded.settingsRow, d.settings) : d.settings,
+      clients: loaded.clients,
+      time: loaded.time,
+      materials: loaded.materials,
+      timesheetCounter: loaded.settingsRow ? (loaded.settingsRow.timesheet_counter || 0) : 0,
+    };
+    if (!loaded.settingsRow) {
+      // Brand-new user: create their settings row now, so later saves
+      // (upserts keyed on user_id) update it instead of inserting one fresh
+      // every time.
+      await Db.saveSettings(settingsToRow(d.settings, 0));
+    }
+  } catch (err) {
+    console.error('Failed to load data from Supabase:', err);
+    showBanner('Could not load your data — check your connection, then reload. (' + err.message + ')', 'err', 10000);
     STATE = defaultState();
   }
 }
@@ -1054,7 +1489,11 @@ async function loadState() {
    Formatting helpers
    ========================================================================= */
 function formatMoney(amount) {
-  const sym = STATE.settings.currencySymbol || '$';
+  // currencySymbol is free text from the settings row (DB has no content
+  // constraint beyond length — see the currency_symbol_len check), so it
+  // must be escaped here: this return value gets inserted via innerHTML in
+  // many places, and an unescaped symbol would be a stored-XSS vector.
+  const sym = escapeHtml(STATE.settings.currencySymbol || '$');
   const n = Billing.round2(amount || 0);
   const parts = Math.abs(n).toFixed(2).split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -1084,6 +1523,13 @@ function todayISO() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** QuickBooks Online's CSV importer expects MM/DD/YYYY regardless of the user's display date format setting. */
+function isoToMDY(iso) {
+  const [y, mo, d] = (iso || '').split('-');
+  if (!y || !mo || !d) return iso || '';
+  return `${mo}/${d}/${y}`;
 }
 
 function addDaysISO(iso, days) {
@@ -1233,18 +1679,21 @@ function wireOverviewTab() {
       STATE.settings.overviewPeriod.from = `${today.slice(0, 7)}-01`;
       STATE.settings.overviewPeriod.to = today;
     }
-    await persist();
     renderOverview();
+    try { await Db.saveSettings({ overview_period: STATE.settings.overviewPeriod }); }
+    catch (err) { showBanner('Could not save your period selection: ' + err.message, 'err', 5000); }
   });
   document.getElementById('ovPeriodFrom').addEventListener('change', async (e) => {
     STATE.settings.overviewPeriod.from = e.target.value || null;
-    await persist();
     renderOverview();
+    try { await Db.saveSettings({ overview_period: STATE.settings.overviewPeriod }); }
+    catch (err) { showBanner('Could not save your period selection: ' + err.message, 'err', 5000); }
   });
   document.getElementById('ovPeriodTo').addEventListener('change', async (e) => {
     STATE.settings.overviewPeriod.to = e.target.value || null;
-    await persist();
     renderOverview();
+    try { await Db.saveSettings({ overview_period: STATE.settings.overviewPeriod }); }
+    catch (err) { showBanner('Could not save your period selection: ' + err.message, 'err', 5000); }
   });
 }
 
@@ -1628,14 +2077,29 @@ function wireTimeTab() {
       invoiced: false,
     };
 
-    if (timeEditingId) {
+    const isEdit = Boolean(timeEditingId);
+    if (isEdit) entry.invoiced = STATE.time.find((x) => x.id === timeEditingId).invoiced;
+
+    // Write to Supabase BEFORE touching STATE or the form: if this fails
+    // (offline, expired session, whatever), the form still holds exactly
+    // what the user typed, ready to retry — nothing is lost.
+    const btn = document.getElementById('timeSubmitBtn');
+    btn.disabled = true;
+    try {
+      if (isEdit) await Db.updateTime(entry); else await Db.insertTime(entry);
+    } catch (err) {
+      showBanner('Could not save this entry — your changes are still in the form. (' + err.message + ')', 'err', 8000);
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+
+    if (isEdit) {
       const idx = STATE.time.findIndex((x) => x.id === timeEditingId);
-      entry.invoiced = STATE.time[idx].invoiced;
       STATE.time[idx] = entry;
     } else {
       STATE.time.push(entry);
     }
-    await persist();
     resetTimeForm();
     renderTime();
     renderOverview();
@@ -1670,8 +2134,9 @@ function wireTimeTab() {
     const mode = e.target.value;
     applyTimeEntryModeUI(mode);
     STATE.settings.timeEntryMode = mode;
-    await persist();
     updateTimePreview();
+    try { await Db.saveSettings({ time_entry_mode: mode }); }
+    catch (err) { showBanner('Could not save entry-mode preference: ' + err.message, 'err', 5000); }
   });
 
   document.getElementById('swToggle').addEventListener('click', () => {
@@ -1698,13 +2163,27 @@ function wireTimeTab() {
     if (btn.dataset.action === 'edit-time') loadTimeEntryIntoForm(id);
     if (btn.dataset.action === 'delete-time') {
       if (confirm('Delete this time entry?')) {
+        try {
+          await Db.deleteTime(id);
+        } catch (err) {
+          showBanner('Could not delete this entry: ' + err.message, 'err', 6000);
+          return;
+        }
         STATE.time = STATE.time.filter((t) => t.id !== id);
-        await persist(); renderTime(); renderOverview();
+        renderTime(); renderOverview();
       }
     }
     if (btn.dataset.action === 'unmark-time') {
       const t = STATE.time.find((x) => x.id === id);
-      if (t) { t.invoiced = false; await persist(); renderTime(); renderOverview(); }
+      if (!t) return;
+      try {
+        await Db.updateTime({ ...t, invoiced: false });
+      } catch (err) {
+        showBanner('Could not unmark this entry: ' + err.message, 'err', 6000);
+        return;
+      }
+      t.invoiced = false;
+      renderTime(); renderOverview();
     }
   });
 
@@ -1801,14 +2280,26 @@ function wireMaterialsTab() {
       billable: document.getElementById('matBillable').checked,
       invoiced: false,
     };
-    if (matEditingId) {
+    const isEdit = Boolean(matEditingId);
+    if (isEdit) entry.invoiced = STATE.materials.find((x) => x.id === matEditingId).invoiced;
+
+    const btn = document.getElementById('matSubmitBtn');
+    btn.disabled = true;
+    try {
+      if (isEdit) await Db.updateMaterial(entry); else await Db.insertMaterial(entry);
+    } catch (err) {
+      showBanner('Could not save this entry — your changes are still in the form. (' + err.message + ')', 'err', 8000);
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+
+    if (isEdit) {
       const idx = STATE.materials.findIndex((x) => x.id === matEditingId);
-      entry.invoiced = STATE.materials[idx].invoiced;
       STATE.materials[idx] = entry;
     } else {
       STATE.materials.push(entry);
     }
-    await persist();
     resetMatForm();
     renderMaterials();
     renderOverview();
@@ -1823,13 +2314,27 @@ function wireMaterialsTab() {
     if (btn.dataset.action === 'edit-mat') loadMatEntryIntoForm(id);
     if (btn.dataset.action === 'delete-mat') {
       if (confirm('Delete this material entry?')) {
+        try {
+          await Db.deleteMaterial(id);
+        } catch (err) {
+          showBanner('Could not delete this entry: ' + err.message, 'err', 6000);
+          return;
+        }
         STATE.materials = STATE.materials.filter((m) => m.id !== id);
-        await persist(); renderMaterials(); renderOverview();
+        renderMaterials(); renderOverview();
       }
     }
     if (btn.dataset.action === 'unmark-mat') {
       const m = STATE.materials.find((x) => x.id === id);
-      if (m) { m.invoiced = false; await persist(); renderMaterials(); renderOverview(); }
+      if (!m) return;
+      try {
+        await Db.updateMaterial({ ...m, invoiced: false });
+      } catch (err) {
+        showBanner('Could not unmark this entry: ' + err.message, 'err', 6000);
+        return;
+      }
+      m.invoiced = false;
+      renderMaterials(); renderOverview();
     }
   });
 }
@@ -1881,6 +2386,220 @@ function loadClientIntoForm(id) {
   showTab('clients');
 }
 
+/* =========================================================================
+   Import customers (Clients tab) — parses a Xero or QuickBooks customer
+   export entirely client-side (PapaParse for .csv, SheetJS for .xlsx, both
+   loaded lazily from the CDN only when a file is actually picked, so most
+   sessions never pay for them). Never touches either accounting API: this
+   is a file-in, Supabase-out path, same as every other CSV in this app.
+   ========================================================================= */
+const IMPORT_MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB is generous for a customer list; keeps parsing fast and bounded
+const IMPORT_NAME_HEADER_ALIASES = ['contactname', 'customer', 'customername', 'name', 'displayname', 'company', 'companyname'];
+const IMPORT_EMAIL_HEADER_ALIASES = ['emailaddress', 'email', 'email address', 'billingemail'];
+const IMPORT_PREVIEW_ROW_CAP = 200; // render at most this many rows; every matched row still gets imported
+
+let importState = { rows: [], headers: [], candidates: [] };
+
+function normalizeHeader(h) {
+  return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function detectColumn(headers, aliases) {
+  const normalizedAliases = aliases.map(normalizeHeader);
+  return headers.find((h) => normalizedAliases.includes(normalizeHeader(h))) || null;
+}
+
+/** Strips a leading formula-trigger character (reuses the same set the CSV *export* path guards against) so an imported name/email can never turn into a spreadsheet formula if re-exported later. */
+function sanitizeImportedText(v) {
+  let s = String(v == null ? '' : v).trim();
+  while (DANGEROUS_CSV_LEADING_CHARS.test(s)) s = s.slice(1).trim();
+  return s;
+}
+
+function loadScript(src, integrity) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.integrity = integrity;
+    s.crossOrigin = 'anonymous';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Could not load a required library — check your internet connection and try again.'));
+    document.head.appendChild(s);
+  });
+}
+let papaLoadPromise = null;
+function loadPapaParse() {
+  if (window.Papa) return Promise.resolve();
+  if (!papaLoadPromise) {
+    papaLoadPromise = loadScript(
+      'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js',
+      'sha384-D/t0ZMqQW31H3az8ktEiNb39wyKnS82iFY52QPACM+IjKW3jDUhyIgh2PApRqJZs'
+    );
+  }
+  return papaLoadPromise;
+}
+let xlsxLoadPromise = null;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  if (!xlsxLoadPromise) {
+    xlsxLoadPromise = loadScript(
+      'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.mini.min.js',
+      'sha384-6fBkVFQw1YKyYpZpKf7bguegzeJqso45fTePEWGNuVaGy70fxEhICA/yswrPjW4+'
+    );
+  }
+  return xlsxLoadPromise;
+}
+
+/** Returns an array of row objects keyed by header, however the file is encoded. */
+async function parseImportFile(file) {
+  if (/\.xlsx$/i.test(file.name)) {
+    await loadXlsx();
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    if (!sheet) throw new Error('This workbook has no sheets.');
+    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  }
+  await loadPapaParse();
+  const text = await file.text();
+  const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+  if (!result.data.length && result.errors.length) {
+    throw new Error('Could not parse this CSV file — it may be corrupted or not actually a CSV.');
+  }
+  return result.data;
+}
+
+/** Dedupes by name (case-insensitive) against both the file itself and STATE.clients — never two inserts for the same name, never a silent overwrite. */
+function buildImportCandidates(rows, nameCol, emailCol) {
+  const seenInFile = new Set();
+  const candidates = [];
+  let blankSkipped = 0;
+  for (const row of rows) {
+    const name = sanitizeImportedText(row[nameCol]);
+    if (!name) { blankSkipped++; continue; }
+    const key = name.toLowerCase();
+    if (seenInFile.has(key)) continue;
+    seenInFile.add(key);
+    const email = emailCol ? sanitizeImportedText(row[emailCol]) : '';
+    const existing = STATE.clients.find((c) => c.name.toLowerCase() === key);
+    let status;
+    if (!existing) status = 'new';
+    else if (email && email !== (existing.email || '')) status = 'update';
+    else status = 'unchanged';
+    candidates.push({ name, email, existingId: existing ? existing.id : null, status });
+  }
+  return { candidates, blankSkipped };
+}
+
+function renderImportPreview() {
+  const candidates = importState.candidates;
+  const counts = candidates.reduce((acc, c) => { acc[c.status]++; return acc; }, { new: 0, update: 0, unchanged: 0 });
+  const summaryParts = [`${counts.new} new`, `${counts.update} to update`, `${counts.unchanged} already up to date`];
+  if (importState.blankSkipped) summaryParts.push(`${importState.blankSkipped} row(s) skipped (no name)`);
+  document.getElementById('importClientsSummary').textContent = `${candidates.length} customer(s) found — ${summaryParts.join(', ')}.`;
+
+  const statusPill = { new: '<span class="pill billable">New</span>', update: '<span class="pill invoiced">Will update email</span>', unchanged: '<span class="pill nonbillable">No change</span>' };
+  const shown = candidates.slice(0, IMPORT_PREVIEW_ROW_CAP);
+  document.getElementById('importClientsRows').innerHTML = shown.map((c) => `
+    <tr>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.email || '')}</td>
+      <td>${statusPill[c.status]}</td>
+    </tr>
+  `).join('') || '<tr class="empty-row"><td colspan="3">No importable rows found.</td></tr>';
+  if (candidates.length > IMPORT_PREVIEW_ROW_CAP) {
+    document.getElementById('importClientsRows').innerHTML += `<tr><td colspan="3" class="muted">…and ${candidates.length - IMPORT_PREVIEW_ROW_CAP} more (all will still be imported).</td></tr>`;
+  }
+  document.getElementById('importClientsPreview').style.display = '';
+}
+
+function showImportPreview(rows, nameCol, emailCol) {
+  const { candidates, blankSkipped } = buildImportCandidates(rows, nameCol, emailCol);
+  importState.candidates = candidates;
+  importState.blankSkipped = blankSkipped;
+  document.getElementById('importClientsMapping').style.display = 'none';
+  renderImportPreview();
+}
+
+function showImportMapping(headers) {
+  const options = headers.map((h) => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
+  document.getElementById('importMapName').innerHTML = options;
+  document.getElementById('importMapEmail').innerHTML = '<option value="">— none —</option>' + options;
+  document.getElementById('importClientsMapping').style.display = '';
+}
+
+function resetImportClientsUI() {
+  importState = { rows: [], headers: [], candidates: [] };
+  document.getElementById('importClientsFile').value = '';
+  document.getElementById('importClientsStatus').textContent = '';
+  document.getElementById('importClientsMapping').style.display = 'none';
+  document.getElementById('importClientsPreview').style.display = 'none';
+}
+
+function wireImportClientsCard() {
+  document.getElementById('importClientsFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > IMPORT_MAX_FILE_BYTES) {
+      showBanner('That file is too large (max 2 MB) — export a smaller customer list.', 'err', 6000);
+      e.target.value = '';
+      return;
+    }
+    document.getElementById('importClientsStatus').textContent = 'Reading file…';
+    try {
+      const rows = await parseImportFile(file);
+      if (!rows.length) throw new Error('No rows found in this file.');
+      const headers = Object.keys(rows[0]);
+      if (!headers.length) throw new Error('This file has no columns Weftling can read.');
+      importState.rows = rows;
+      importState.headers = headers;
+      const nameCol = detectColumn(headers, IMPORT_NAME_HEADER_ALIASES);
+      if (nameCol) {
+        showImportPreview(rows, nameCol, detectColumn(headers, IMPORT_EMAIL_HEADER_ALIASES));
+      } else {
+        showImportMapping(headers);
+      }
+      document.getElementById('importClientsStatus').textContent = '';
+    } catch (err) {
+      document.getElementById('importClientsStatus').textContent = '';
+      showBanner('Could not read this file: ' + err.message, 'err', 8000);
+    } finally {
+      e.target.value = '';
+    }
+  });
+
+  document.getElementById('importMapContinue').addEventListener('click', () => {
+    const nameCol = document.getElementById('importMapName').value;
+    const emailCol = document.getElementById('importMapEmail').value || null;
+    if (!nameCol) { showBanner('Pick which column is the customer name.', 'err', 4000); return; }
+    showImportPreview(importState.rows, nameCol, emailCol);
+  });
+
+  document.getElementById('importClientsCancel').addEventListener('click', () => resetImportClientsUI());
+
+  document.getElementById('importClientsConfirm').addEventListener('click', async () => {
+    const candidates = importState.candidates;
+    const toInsert = candidates.filter((c) => c.status === 'new').map((c) => ({ id: uid(), name: c.name, email: c.email || null, rate: null, increment: null }));
+    const toUpdate = candidates.filter((c) => c.status === 'update');
+    const btn = document.getElementById('importClientsConfirm');
+    btn.disabled = true;
+    try {
+      if (toInsert.length) await Db.insertManyClients(toInsert);
+      for (const c of toUpdate) {
+        const existing = clientById(c.existingId);
+        if (existing) await Db.updateClient({ ...existing, email: c.email || null });
+      }
+      await loadState();
+      renderAll();
+      showBanner(`Import complete: ${toInsert.length} added, ${toUpdate.length} updated, ${candidates.length - toInsert.length - toUpdate.length} already up to date.`, 'ok', 6000);
+    } catch (err) {
+      showBanner('Import failed partway through: ' + err.message + '. Check the Clients tab — some rows may already be in.', 'err', 10000);
+    } finally {
+      btn.disabled = false;
+      resetImportClientsUI();
+    }
+  });
+}
+
 function wireClientsTab() {
   document.getElementById('clientForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1893,13 +2612,25 @@ function wireClientsTab() {
       rate: rateRaw !== '' ? Number(rateRaw) : null,
       increment: incRaw !== '' ? Number(incRaw) : null,
     };
-    if (clientEditingId) {
+    const isEdit = Boolean(clientEditingId);
+
+    const btn = document.getElementById('clientSubmitBtn');
+    btn.disabled = true;
+    try {
+      if (isEdit) await Db.updateClient(entry); else await Db.insertClient(entry);
+    } catch (err) {
+      showBanner('Could not save this client — your changes are still in the form. (' + err.message + ')', 'err', 8000);
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+
+    if (isEdit) {
       const idx = STATE.clients.findIndex((x) => x.id === clientEditingId);
       STATE.clients[idx] = entry;
     } else {
       STATE.clients.push(entry);
     }
-    await persist();
     resetClientForm();
     renderClients();
     renderOverview();
@@ -1916,8 +2647,14 @@ function wireClientsTab() {
       const inUse = STATE.time.some((t) => t.clientId === id) || STATE.materials.some((m) => m.clientId === id);
       if (inUse) { showBanner('This client has time or material entries — cannot delete.', 'err', 5000); return; }
       if (confirm('Delete this client?')) {
+        try {
+          await Db.deleteClient(id);
+        } catch (err) {
+          showBanner('Could not delete this client: ' + err.message, 'err', 6000);
+          return;
+        }
         STATE.clients = STATE.clients.filter((c) => c.id !== id);
-        await persist(); renderClients(); renderOverview();
+        renderClients(); renderOverview();
       }
     }
   });
@@ -1995,20 +2732,31 @@ function renderInvoicePreview() {
   document.getElementById('invDownloadQbCsv').disabled = !lines.length;
 }
 
-function markPreviewInvoiced() {
-  for (const l of currentPreview.lineItems) {
+async function markPreviewInvoiced() {
+  const results = await Promise.allSettled(currentPreview.lineItems.map((l) => {
     if (l.kind === 'time') {
       const t = STATE.time.find((x) => x.id === l.sourceId);
-      if (t) t.invoiced = true;
-    } else {
-      const m = STATE.materials.find((x) => x.id === l.sourceId);
-      if (m) m.invoiced = true;
+      return t ? Db.updateTime({ ...t, invoiced: true }).then(() => { t.invoiced = true; }) : Promise.resolve();
     }
+    const m = STATE.materials.find((x) => x.id === l.sourceId);
+    return m ? Db.updateMaterial({ ...m, invoiced: true }).then(() => { m.invoiced = true; }) : Promise.resolve();
+  }));
+  const failed = results.filter((r) => r.status === 'rejected').length;
+  if (failed) {
+    showBanner(`${failed} of ${currentPreview.lineItems.length} entries could not be marked invoiced — try again from the Time/Materials tab.`, 'err', 8000);
   }
 }
 
+// A cell starting with any of these is interpreted as a formula by Excel/
+// Sheets/LibreOffice when opened, not treated as literal text (CWE-1236,
+// "CSV injection"). description/name/reference fields are free text that
+// ends up in exported CSVs, so this has to be handled at the one shared
+// writer rather than trusted to whoever's typing.
+const DANGEROUS_CSV_LEADING_CHARS = /^[=+\-@\t\r]/;
+
 function csvEscape(v) {
-  const s = String(v == null ? '' : v);
+  let s = String(v == null ? '' : v);
+  if (DANGEROUS_CSV_LEADING_CHARS.test(s)) s = "'" + s; // force spreadsheet apps to treat it as text
   if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
@@ -2047,7 +2795,7 @@ function downloadCsvForPreview() {
     l.accountCode || '', l.taxType || '',
   ]));
 
-  downloadCsvFile(`weftly-invoice-xero-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
+  downloadCsvFile(`weftling-invoice-xero-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
 }
 
 /** QuickBooks Online's invoice import layout: one row per line item, sharing Customer/dates/Invoice No. */
@@ -2056,19 +2804,19 @@ function downloadQbCsvForPreview() {
   const invoiceNo = document.getElementById('invReference').value.trim();
   const invDate = document.getElementById('invDate').value || todayISO();
   const dueDate = document.getElementById('invDue').value || addDaysISO(invDate, Number(STATE.settings.termsDays) || 0);
+  const productService = STATE.settings.qbProductService || '';
 
-  const header = ['Customer', 'Invoice Date', 'Due Date', 'Invoice No', 'Item(Product/Service)', 'Item Description', 'Item Quantity', 'Item Rate', 'Item Amount'];
+  const header = ['InvoiceNo', 'Customer', 'InvoiceDate', 'DueDate', 'ItemDescription', 'Product/Service', 'Quantity', 'Rate', 'Amount'];
   const rows = currentPreview.lineItems.map((l) => ([
-    c.name, invDate, dueDate, invoiceNo, '', l.description, l.quantity, l.unitAmount.toFixed(2), (l.quantity * l.unitAmount).toFixed(2),
+    invoiceNo, c.name, isoToMDY(invDate), isoToMDY(dueDate), l.description, productService, l.quantity, l.unitAmount.toFixed(2), (l.quantity * l.unitAmount).toFixed(2),
   ]));
 
-  downloadCsvFile(`weftly-invoice-quickbooks-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
+  downloadCsvFile(`weftling-invoice-quickbooks-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
 }
 
-function afterCsvDownload() {
+async function afterCsvDownload() {
   if (confirm('Mark these entries as invoiced now that you’ve exported the CSV?')) {
-    markPreviewInvoiced();
-    persist();
+    await markPreviewInvoiced();
     renderInvoicePreview();
     renderTime(); renderMaterials(); renderOverview(); renderClients();
     showBanner('CSV downloaded and entries marked invoiced.', 'ok', 5000);
@@ -2089,16 +2837,16 @@ function wireInvoiceTab() {
     renderInvoicePreview();
   });
 
-  document.getElementById('invDownloadCsv').addEventListener('click', () => {
+  document.getElementById('invDownloadCsv').addEventListener('click', async () => {
     if (!currentPreview || !currentPreview.lineItems.length) return;
     downloadCsvForPreview();
-    afterCsvDownload();
+    await afterCsvDownload();
   });
 
-  document.getElementById('invDownloadQbCsv').addEventListener('click', () => {
+  document.getElementById('invDownloadQbCsv').addEventListener('click', async () => {
     if (!currentPreview || !currentPreview.lineItems.length) return;
     downloadQbCsvForPreview();
-    afterCsvDownload();
+    await afterCsvDownload();
   });
 }
 
@@ -2306,7 +3054,8 @@ async function generateTimesheet() {
   }
 
   const refNumber = nextTimesheetRefNumber();
-  await persist();
+  try { await Db.saveSettings({ timesheet_counter: STATE.timesheetCounter }); }
+  catch (err) { showBanner('Timesheet ref number could not be saved remotely (it may repeat next time): ' + err.message, 'err', 6000); }
 
   currentTimesheet = {
     refNumber,
@@ -2336,16 +3085,19 @@ function wireTimesheetTab() {
       STATE.settings.timesheetPeriod.from = `${today.slice(0, 7)}-01`;
       STATE.settings.timesheetPeriod.to = today;
     }
-    await persist();
     renderTimesheetTab();
+    try { await Db.saveSettings({ timesheet_period: STATE.settings.timesheetPeriod }); }
+    catch (err) { showBanner('Could not save your period selection: ' + err.message, 'err', 5000); }
   });
   document.getElementById('tsPeriodFrom').addEventListener('change', async (e) => {
     STATE.settings.timesheetPeriod.from = e.target.value || null;
-    await persist();
+    try { await Db.saveSettings({ timesheet_period: STATE.settings.timesheetPeriod }); }
+    catch (err) { showBanner('Could not save your period selection: ' + err.message, 'err', 5000); }
   });
   document.getElementById('tsPeriodTo').addEventListener('change', async (e) => {
     STATE.settings.timesheetPeriod.to = e.target.value || null;
-    await persist();
+    try { await Db.saveSettings({ timesheet_period: STATE.settings.timesheetPeriod }); }
+    catch (err) { showBanner('Could not save your period selection: ' + err.message, 'err', 5000); }
   });
 
   document.getElementById('timesheetForm').addEventListener('submit', async (e) => {
@@ -2363,7 +3115,7 @@ function wireTimesheetTab() {
 
   document.getElementById('tsOpenEmail').addEventListener('click', () => {
     if (!currentTimesheet) return;
-    const subject = `Timesheet — ${currentTimesheet.periodLabel} — ${currentTimesheet.contractor.name || 'Weftly'}`;
+    const subject = `Timesheet — ${currentTimesheet.periodLabel} — ${currentTimesheet.contractor.name || 'Weftling'}`;
     const body = renderTimesheetText(currentTimesheet);
     const to = currentTimesheet.client.email || '';
     const url = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -2386,7 +3138,7 @@ function exportJsonBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `weftly-backup-${todayISO()}.json`;
+  a.download = `weftling-backup-${todayISO()}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -2413,7 +3165,7 @@ function exportTimeCsv() {
       t.invoiced ? 'Yes' : 'No',
     ];
   });
-  downloadCsvFile(`weftly-time-${todayISO()}.csv`, header, rows);
+  downloadCsvFile(`weftling-time-${todayISO()}.csv`, header, rows);
 }
 
 function exportMaterialsCsv() {
@@ -2432,7 +3184,7 @@ function exportMaterialsCsv() {
       m.invoiced ? 'Yes' : 'No',
     ];
   });
-  downloadCsvFile(`weftly-materials-${todayISO()}.csv`, header, rows);
+  downloadCsvFile(`weftling-materials-${todayISO()}.csv`, header, rows);
 }
 
 function exportClientsCsv() {
@@ -2443,7 +3195,7 @@ function exportClientsCsv() {
     c.rate != null ? c.rate : '',
     c.increment != null ? c.increment : '',
   ]);
-  downloadCsvFile(`weftly-clients-${todayISO()}.csv`, header, rows);
+  downloadCsvFile(`weftling-clients-${todayISO()}.csv`, header, rows);
 }
 
 function exportAllCsv() {
@@ -2489,16 +3241,40 @@ async function executeReset() {
     return;
   }
 
+  // Delete remotely first, category by category — only clear the matching
+  // local array once its delete actually succeeds, so a failure partway
+  // through (e.g. offline) leaves STATE consistent with what's really still
+  // in Supabase rather than silently ahead of it.
   const cleared = [];
-  if (flags.resetTime) { cleared.push(`${STATE.time.length} time entries`); STATE.time = []; }
-  if (flags.resetMaterials) { cleared.push(`${STATE.materials.length} materials`); STATE.materials = []; }
-  if (flags.resetClients) { cleared.push(`${STATE.clients.length} clients`); STATE.clients = []; }
-  if (flags.resetSettings) {
-    cleared.push('settings (back to defaults)');
-    STATE.settings = defaultState().settings;
+  try {
+    if (flags.resetTime) {
+      const count = STATE.time.length;
+      await Db.deleteAllTime();
+      STATE.time = [];
+      cleared.push(`${count} time entries`);
+    }
+    if (flags.resetMaterials) {
+      const count = STATE.materials.length;
+      await Db.deleteAllMaterials();
+      STATE.materials = [];
+      cleared.push(`${count} materials`);
+    }
+    if (flags.resetClients) {
+      const count = STATE.clients.length;
+      await Db.deleteAllClients();
+      STATE.clients = [];
+      cleared.push(`${count} clients`);
+    }
+    if (flags.resetSettings) {
+      STATE.settings = defaultState().settings;
+      await Db.saveSettings(settingsToRow(STATE.settings));
+      cleared.push('settings (back to defaults)');
+    }
+  } catch (err) {
+    showBanner('Reset stopped partway through: ' + err.message + '. Re-open Reset data to see what still needs clearing.', 'err', 10000);
+    renderAll();
+    return;
   }
-
-  await persist();
 
   // Nothing left in-progress should reference records that just disappeared.
   resetTimeForm();
@@ -2524,7 +3300,6 @@ function renderSettings() {
   document.getElementById('setMarkup').value = s.defaultMarkup;
   document.getElementById('setCurrency').value = s.currencySymbol;
   document.getElementById('setDateFormat').value = s.dateFormat;
-  document.getElementById('storageModeText').textContent = Storage.mode;
 
   const ct = s.contractor;
   document.getElementById('ctName').value = ct.name || '';
@@ -2537,12 +3312,21 @@ function renderSettings() {
 
   document.getElementById('setAccountCode').value = s.xeroAccountCode || '';
   document.getElementById('setTaxType').value = s.xeroTaxType || '';
+  document.getElementById('setAccountingSoftware').value = s.accountingSoftware || '';
+  document.getElementById('setQbProductService').value = s.qbProductService || '';
+  applyAccountingSoftwareVisibility(s.accountingSoftware || '');
+}
+
+/** Shows only the fields relevant to the chosen accounting software; "Neither / not sure" hides both groups. */
+function applyAccountingSoftwareVisibility(software) {
+  document.getElementById('xeroExportFields').style.display = software === 'xero' ? '' : 'none';
+  document.getElementById('qbExportFields').style.display = software === 'quickbooks' ? '' : 'none';
 }
 
 function wireSettingsTab() {
   document.getElementById('settingsForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    Object.assign(STATE.settings, {
+    const next = {
       defaultRate: Number(document.getElementById('setRate').value) || 0,
       defaultIncrement: Number(document.getElementById('setIncrement').value) || 15,
       roundingMode: document.getElementById('setRounding').value,
@@ -2551,15 +3335,34 @@ function wireSettingsTab() {
       defaultMarkup: Number(document.getElementById('setMarkup').value) || 0,
       currencySymbol: document.getElementById('setCurrency').value || '$',
       dateFormat: document.getElementById('setDateFormat').value,
-    });
-    await persist();
+    };
+    const btn = document.getElementById('settingsSubmitBtn');
+    btn.disabled = true;
+    try {
+      await Db.saveSettings({
+        default_rate: next.defaultRate,
+        default_increment: next.defaultIncrement,
+        rounding_mode: next.roundingMode,
+        min_one_increment: next.minOneIncrement,
+        terms_days: next.termsDays,
+        default_markup: next.defaultMarkup,
+        currency_symbol: next.currencySymbol,
+        date_format: next.dateFormat,
+      });
+    } catch (err) {
+      showBanner('Could not save defaults — your changes are still in the form. (' + err.message + ')', 'err', 8000);
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    Object.assign(STATE.settings, next);
     showBanner('Defaults saved.', 'ok', 3000);
     renderAll();
   });
 
   document.getElementById('contractorForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    STATE.settings.contractor = {
+    const contractor = {
       name: document.getElementById('ctName').value.trim(),
       businessName: document.getElementById('ctBusiness').value.trim(),
       address: document.getElementById('ctAddress').value.trim(),
@@ -2568,16 +3371,48 @@ function wireSettingsTab() {
       paymentInstructions: document.getElementById('ctPayment').value.trim(),
       note: document.getElementById('ctNote').value.trim(),
     };
-    await persist();
+    const btn = document.getElementById('contractorSubmitBtn');
+    btn.disabled = true;
+    try {
+      await Db.saveSettings({ contractor });
+    } catch (err) {
+      showBanner('Could not save contractor details — your changes are still in the form. (' + err.message + ')', 'err', 8000);
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    STATE.settings.contractor = contractor;
     showBanner('Contractor details saved.', 'ok', 3000);
   });
 
-  document.getElementById('saveExportFields').addEventListener('click', async () => {
-    const accEl = document.getElementById('setAccountCode');
-    const taxEl = document.getElementById('setTaxType');
-    STATE.settings.xeroAccountCode = accEl.value || '';
-    STATE.settings.xeroTaxType = taxEl.value || '';
-    await persist();
+  document.getElementById('setAccountingSoftware').addEventListener('change', (e) => {
+    applyAccountingSoftwareVisibility(e.target.value);
+  });
+
+  document.getElementById('saveExportFields').addEventListener('click', async (e) => {
+    const accountingSoftware = document.getElementById('setAccountingSoftware').value || '';
+    const xeroAccountCode = document.getElementById('setAccountCode').value || '';
+    const xeroTaxType = document.getElementById('setTaxType').value || '';
+    const qbProductService = document.getElementById('setQbProductService').value || '';
+    const btn = e.target;
+    btn.disabled = true;
+    try {
+      await Db.saveSettings({
+        accounting_software: accountingSoftware,
+        xero_account_code: xeroAccountCode,
+        xero_tax_type: xeroTaxType,
+        qb_product_service: qbProductService,
+      });
+    } catch (err) {
+      showBanner('Could not save export fields: ' + err.message, 'err', 8000);
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    STATE.settings.accountingSoftware = accountingSoftware;
+    STATE.settings.xeroAccountCode = xeroAccountCode;
+    STATE.settings.xeroTaxType = xeroTaxType;
+    STATE.settings.qbProductService = qbProductService;
     showBanner('Export fields saved.', 'ok', 3000);
   });
 
@@ -2591,22 +3426,33 @@ function wireSettingsTab() {
       const text = await file.text();
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== 'object' || !('settings' in parsed)) {
-        throw new Error('This file doesn’t look like a Weftly backup.');
+        throw new Error('This file doesn’t look like a Weftling backup.');
       }
-      if (!confirm('This will replace all current Weftly data with the contents of this backup. Continue?')) return;
+      if (!confirm('This will replace all current Weftling data with the contents of this backup. Continue?')) return;
+
       const d = defaultState();
-      STATE = {
-        settings: Object.assign(d.settings, parsed.settings || {}),
-        clients: Array.isArray(parsed.clients) ? parsed.clients : [],
-        time: Array.isArray(parsed.time) ? parsed.time : [],
-        materials: Array.isArray(parsed.materials) ? parsed.materials : [],
-        timesheetCounter: Number.isFinite(parsed.timesheetCounter) ? parsed.timesheetCounter : 0,
-      };
-      await persist();
+      const clients = Array.isArray(parsed.clients) ? parsed.clients : [];
+      const time = Array.isArray(parsed.time) ? parsed.time : [];
+      const materials = Array.isArray(parsed.materials) ? parsed.materials : [];
+      const settings = Object.assign(d.settings, parsed.settings || {});
+      const timesheetCounter = Number.isFinite(parsed.timesheetCounter) ? parsed.timesheetCounter : 0;
+
+      // Wipe this user's existing rows, then bulk-insert the backup's rows
+      // in their place — same "replace everything" semantics as before,
+      // just expressed as table operations instead of one blob write.
+      await Db.deleteAllTime();
+      await Db.deleteAllMaterials();
+      await Db.deleteAllClients();
+      if (clients.length) await Db.insertManyClients(clients);
+      if (time.length) await Db.insertManyTime(time);
+      if (materials.length) await Db.insertManyMaterials(materials);
+      await Db.saveSettings(settingsToRow(settings, timesheetCounter));
+
+      await loadState();
       renderAll();
       showBanner('Backup restored.', 'ok', 4000);
     } catch (err) {
-      showBanner('Import failed: ' + err.message, 'err', 6000);
+      showBanner('Import failed partway through: ' + err.message + '. Check the Time/Materials/Clients tabs — some rows may already be gone or partially restored.', 'err', 10000);
     } finally {
       e.target.value = '';
     }
@@ -2658,14 +3504,156 @@ function registerServiceWorker() {
   }
 }
 
-async function init() {
-  await Storage.init();
+/* =========================================================================
+   Auth — gates the whole app behind a Supabase session. #authScreen and
+   #appShell are simple show/hide toggles; the actual app (everything wired
+   by initApp()) doesn't start running until the first time we see a
+   signed-in session.
+   ========================================================================= */
+let appStarted = false; // guards against initApp() running twice
+let authMode = 'signin'; // 'signin' | 'signup'
+
+function showAuthScreen() {
+  CURRENT_USER = null;
+  document.getElementById('authScreen').style.display = '';
+  document.getElementById('appShell').style.display = 'none';
+}
+
+function showApp(user) {
+  CURRENT_USER = user; // set BEFORE initApp() so its first Supabase queries always have a user to scope to
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = '';
+  document.getElementById('authUserEmail').textContent = user.email || '';
+  if (!appStarted) {
+    appStarted = true;
+    initApp();
+  }
+}
+
+function authBanner(message, kind) {
+  const el = document.getElementById('authBanner');
+  el.innerHTML = message ? `<div class="banner ${kind}">${escapeHtml(message)}</div>` : '';
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isSignup = mode === 'signup';
+  document.getElementById('authSubtitle').textContent = isSignup ? 'Create your account' : 'Sign in to your account';
+  document.getElementById('authSubmitBtn').textContent = isSignup ? 'Sign up' : 'Sign in';
+  document.getElementById('authToggleText').textContent = isSignup ? 'Already have an account?' : 'Don’t have an account?';
+  document.getElementById('authToggleBtn').textContent = isSignup ? 'Sign in' : 'Sign up';
+  authBanner('');
+}
+
+function wireAuthScreen() {
+  document.getElementById('authToggleBtn').addEventListener('click', () => {
+    setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+  });
+
+  document.getElementById('authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!SupabaseClient) {
+      authBanner('Supabase isn’t configured — see public/config.js.', 'err');
+      return;
+    }
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const btn = document.getElementById('authSubmitBtn');
+    btn.disabled = true;
+    authBanner('');
+    try {
+      if (authMode === 'signup') {
+        const { data, error } = await SupabaseClient.auth.signUp({ email, password });
+        if (error) {
+          // Supabase's default signup error reveals whether an email is
+          // already registered ("User already registered"), which lets
+          // anyone enumerate accounts one guess at a time by watching for
+          // that specific message. Fold that one case into the exact same
+          // "check your email" wording a brand-new signup gets below — from
+          // the outside, a retry on a registered email and a genuine new
+          // signup are now indistinguishable. Any other error (weak
+          // password, bad email format, rate limiting) still shows its real
+          // message, since those don't leak whether the account exists.
+          if (/already registered|already exists/i.test(error.message || '')) {
+            authBanner('If that email can be registered, check your inbox for a confirmation link.', 'info', 8000);
+            setAuthMode('signin');
+            btn.disabled = false;
+            return;
+          }
+          throw error;
+        }
+        if (!data.session) {
+          // Email confirmation is on for this project: signUp() succeeds but
+          // doesn't return a session until the user clicks the link in their
+          // inbox. If confirmation were off, data.session would be set here
+          // and onAuthStateChange (wired below) would take it from there.
+          authBanner('Account created — check your email to confirm it, then sign in.', 'ok');
+          setAuthMode('signin');
+        }
+      } else {
+        const { error } = await SupabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (err) {
+      authBanner(err.message || 'Something went wrong.', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function wireLogout() {
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    if (!SupabaseClient) return;
+    await SupabaseClient.auth.signOut();
+    // Full reload rather than trying to reset in-memory STATE/listeners by
+    // hand: it guarantees the next sign-in starts from a completely clean
+    // slate, with zero risk of one user's data lingering in memory for the
+    // next. Matters even more once Step 5 loads per-user data on startup.
+    location.reload();
+  });
+}
+
+async function initAuth() {
+  clearLegacyLocalStorage();
+  wireAuthScreen();
+  wireLogout();
+
+  if (!SupabaseClient) {
+    authBanner('Supabase isn’t configured — edit public/config.js with your project URL and anon key, then reload.', 'err');
+    showAuthScreen();
+    return;
+  }
+
+  // Initial paint: ask once for whatever session already exists (e.g. a
+  // returning visitor). supabase-js persists this itself in the browser's
+  // own localStorage, under its own key — separate from (and unaffected by
+  // changes to) Weftly's own app-data storage.
+  const { data: { session } } = await SupabaseClient.auth.getSession();
+  if (session) showApp(session.user); else showAuthScreen();
+
+  // Everything after the first paint — sign in, sign up, sign out, a token
+  // refresh — comes through here instead. showApp()'s appStarted guard means
+  // initApp() still only ever runs once, no matter how many times this fires.
+  SupabaseClient.auth.onAuthStateChange((event, session) => {
+    if (session) showApp(session.user);
+    else showAuthScreen();
+  });
+}
+
+/* =========================================================================
+   App — everything that used to run unconditionally at load now runs once,
+   the first time we know who's signed in. Backed by Supabase, scoped to
+   CURRENT_USER (set by showApp() just before this runs).
+   ========================================================================= */
+async function initApp() {
   await loadState();
   wireTabNav();
   wireOverviewTab();
   wireTimeTab();
   wireMaterialsTab();
   wireClientsTab();
+  wireImportClientsCard();
   wireInvoiceTab();
   wireTimesheetTab();
   wireSettingsTab();
@@ -2673,7 +3661,7 @@ async function init() {
   registerServiceWorker();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', initAuth);
 </script>
 </body>
 </html>
