@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Weftly</title>
-<meta name="description" content="Local-first time &amp; materials tracker that bills through Xero." />
+<meta name="description" content="Local-first time &amp; materials tracker with CSV invoice export." />
 
 <!-- PWA -->
 <link rel="manifest" href="/manifest.webmanifest" />
@@ -77,20 +77,6 @@
     font-weight: 700;
     letter-spacing: 0.02em;
     font-size: 17px;
-  }
-
-  header.app-header .conn-pill {
-    font-size: 12px;
-    padding: 3px 9px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.25);
-    color: rgba(255,255,255,0.85);
-    white-space: nowrap;
-  }
-  header.app-header .conn-pill.connected {
-    background: var(--teal);
-    border-color: var(--teal);
-    color: #fff;
   }
 
   nav.tabs {
@@ -337,7 +323,6 @@
 
 <header class="app-header">
   <div class="brand">Weftly</div>
-  <div id="connPill" class="conn-pill">Xero: checking…</div>
 </header>
 
 <nav class="tabs" id="tabNav">
@@ -407,7 +392,7 @@
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Client</th><th class="num">Open</th><th class="num">Paid</th><th class="num">Total Invoices</th><th class="num">Unbilled</th></tr></thead>
+          <thead><tr><th>Client</th><th class="num">Unbilled</th></tr></thead>
           <tbody id="ovByClient"></tbody>
           <tfoot id="ovByClientFoot"></tfoot>
         </table>
@@ -485,10 +470,6 @@
             <label for="timeIncrement">Increment (min)</label>
             <input type="number" id="timeIncrement" min="1" step="1" />
           </div>
-          <div class="field">
-            <label for="timeItem">Line Item (optional)</label>
-            <select id="timeItem"><option value="">—</option></select>
-          </div>
         </div>
         <div class="field checkbox-field">
           <input type="checkbox" id="timeBillable" checked />
@@ -553,10 +534,6 @@
             <label for="matDesc">Description</label>
             <input type="text" id="matDesc" required />
           </div>
-          <div class="field">
-            <label for="matItem">Line Item (optional)</label>
-            <select id="matItem"><option value="">—</option></select>
-          </div>
         </div>
         <div class="row">
           <div class="field">
@@ -613,10 +590,6 @@
             <label for="clientName">Name</label>
             <input type="text" id="clientName" required />
           </div>
-          <div class="field">
-            <label for="clientXeroContact">Xero contact</label>
-            <select id="clientXeroContact"><option value="">Not linked</option></select>
-          </div>
         </div>
         <div class="row">
           <div class="field">
@@ -647,7 +620,7 @@
         <table>
           <thead>
             <tr>
-              <th>Name</th><th>Xero contact</th>
+              <th>Name</th>
               <th class="num">Rate</th><th class="num">Increment</th>
               <th class="num">Unbilled</th><th></th>
             </tr>
@@ -711,27 +684,8 @@
         </table>
       </div>
       <div class="btn-row" style="margin-top:14px;">
-        <button type="button" class="btn primary" id="invCreateDraft">Create draft in Xero</button>
-        <button type="button" class="btn secondary" id="invDownloadCsv">Download Xero-import CSV</button>
-      </div>
-      <p class="muted" id="invHint" style="font-size:12.5px;"></p>
-    </div>
-
-    <div class="card">
-      <div class="btn-row" style="justify-content:space-between; margin-bottom:10px;">
-        <h2 style="margin:0;">Weftly-created invoices</h2>
-        <button type="button" class="btn secondary small" id="refreshInvoicesBtn">Refresh from Xero</button>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th><th>Client</th><th>Date</th><th>Due</th><th>Status</th>
-              <th class="num">Total</th><th class="num">Outstanding</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="invoiceListRows"></tbody>
-        </table>
+        <button type="button" class="btn primary" id="invDownloadCsv">Download Xero-format CSV</button>
+        <button type="button" class="btn secondary" id="invDownloadQbCsv">Download QuickBooks-format CSV</button>
       </div>
     </div>
   </section>
@@ -898,31 +852,19 @@
     </div>
 
     <div class="card">
-      <h2>Xero connection</h2>
-      <p id="xeroStatusText" class="muted">Checking…</p>
-      <div class="btn-row">
-        <a id="xeroConnectBtn" class="btn primary" href="/connect" style="display:none;">Connect to Xero</a>
-        <button id="xeroDisconnectBtn" class="btn danger" style="display:none;">Disconnect</button>
-        <button id="pullCustomersBtn" class="btn secondary small" style="display:none;">Pull customers</button>
-        <button id="pullItemsBtn" class="btn secondary small" style="display:none;">Pull items</button>
-      </div>
-      <p class="muted" style="font-size:12px;">Customers and items sync automatically when Weftly loads while connected. Use these to refresh without reloading the page.</p>
-    </div>
-
-    <div class="card">
-      <h2>Xero invoice fields</h2>
+      <h2>Accounting export fields</h2>
       <div class="row">
         <div class="field">
-          <label for="setAccountCode">Default account code</label>
-          <select id="setAccountCode"><option value="">— select —</option></select>
+          <label for="setAccountCode">Account code (for accounting export)</label>
+          <input type="text" id="setAccountCode" placeholder="e.g. 200" />
         </div>
         <div class="field">
-          <label for="setTaxType">Default tax type</label>
-          <select id="setTaxType"><option value="">— select —</option></select>
+          <label for="setTaxType">Tax type (for accounting export)</label>
+          <input type="text" id="setTaxType" placeholder="e.g. OUTPUT2" />
         </div>
       </div>
-      <button type="button" class="btn secondary small" id="saveXeroFields">Save Xero fields</button>
-      <p class="muted" style="font-size:12px;">Used for entries that don't have a line item selected. Populated from your Xero chart of accounts once connected; enter manually otherwise.</p>
+      <button type="button" class="btn secondary small" id="saveExportFields">Save export fields</button>
+      <p class="muted" style="font-size:12px;">Used on the Xero-format CSV export for every line item.</p>
     </div>
 
     <div class="card">
@@ -941,7 +883,6 @@
 
     <div class="card">
       <h2>Reset data</h2>
-      <p class="muted" style="font-size:12px;">Your Xero connection lives separately (token.json on this machine) and is never touched here — clients and items simply re-pull from Xero the next time you're connected.</p>
       <button type="button" class="btn danger" id="openResetPanelBtn">Reset data…</button>
 
       <div id="resetPanel" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
@@ -962,10 +903,6 @@
           <label for="resetClients">Clients</label>
         </div>
         <div class="reset-check">
-          <input type="checkbox" id="resetInvoices" />
-          <label for="resetInvoices">Recorded invoices</label>
-        </div>
-        <div class="reset-check">
           <input type="checkbox" id="resetSettings" />
           <label for="resetSettings">Reset settings to defaults</label>
         </div>
@@ -979,7 +916,7 @@
     </div>
   </section>
 
-  <footer class="hint">Weftly · time &amp; materials, billed through Xero</footer>
+  <footer class="hint">Weftly · time &amp; materials, exported for your accounting software</footer>
 </main>
 
 <script>
@@ -1082,7 +1019,6 @@ function defaultState() {
     clients: [],
     time: [],
     materials: [],
-    invoices: [],
     timesheetCounter: 0,
   };
 }
@@ -1098,15 +1034,6 @@ async function persist() {
   await Storage.set(DATA_KEY, STATE);
 }
 
-/** Older Weftly data stamped entries with `invoiceId`; the field is now `xeroInvoiceId`. */
-function migrateEntryInvoiceField(entry) {
-  if (entry.xeroInvoiceId === undefined && entry.invoiceId !== undefined) {
-    entry.xeroInvoiceId = entry.invoiceId;
-  }
-  delete entry.invoiceId;
-  return entry;
-}
-
 async function loadState() {
   const raw = await Storage.get(DATA_KEY);
   if (raw && typeof raw === 'object') {
@@ -1114,9 +1041,8 @@ async function loadState() {
     STATE = {
       settings: Object.assign(d.settings, raw.settings || {}),
       clients: Array.isArray(raw.clients) ? raw.clients : [],
-      time: (Array.isArray(raw.time) ? raw.time : []).map(migrateEntryInvoiceField),
-      materials: (Array.isArray(raw.materials) ? raw.materials : []).map(migrateEntryInvoiceField),
-      invoices: Array.isArray(raw.invoices) ? raw.invoices : [],
+      time: Array.isArray(raw.time) ? raw.time : [],
+      materials: Array.isArray(raw.materials) ? raw.materials : [],
       timesheetCounter: Number.isFinite(raw.timesheetCounter) ? raw.timesheetCounter : 0,
     };
   } else {
@@ -1271,90 +1197,6 @@ function periodLabel(sel, range) {
 function overviewPeriodRange() { return periodRange(STATE.settings.overviewPeriod); }
 function overviewPeriodLabel(range) { return periodLabel(STATE.settings.overviewPeriod, range); }
 
-/**
- * Friendly status for a locally-tracked invoice record, derived from Xero's
- * raw status + amounts (see the Weftly invoice status mapping spec).
- */
-function invoiceFriendlyStatus(rec) {
-  const today = todayISO();
-  switch (rec.status) {
-    case 'DRAFT': return 'Draft';
-    case 'SUBMITTED': return 'Awaiting approval';
-    case 'VOIDED': return 'Voided';
-    case 'DELETED': return 'Voided';
-    case 'PAID': return 'Paid';
-    case 'AUTHORISED':
-      if ((rec.amountDue || 0) <= 0) return 'Paid';
-      return rec.dueDate && rec.dueDate < today ? 'Overdue' : 'Awaiting payment';
-    default:
-      return rec.status || 'Unknown';
-  }
-}
-
-function invoiceStatusPillClass(friendly) {
-  if (friendly === 'Overdue') return 'overdue';
-  if (friendly === 'Paid') return 'billable'; // reuse the existing "positive" teal/green pill
-  return 'nonbillable'; // Draft, Awaiting approval, Awaiting payment, Voided — all neutral per spec
-}
-
-/* =========================================================================
-   Xero API client (thin fetch wrapper against our own backend)
-   ========================================================================= */
-const Api = {
-  async status() { return (await fetch('/api/status')).json(); },
-  async contacts() {
-    const res = await fetch('/api/contacts');
-    if (!res.ok) throw await apiError(res);
-    return (await res.json()).contacts;
-  },
-  async items() {
-    const res = await fetch('/api/items');
-    if (!res.ok) throw await apiError(res);
-    return (await res.json()).items;
-  },
-  async accounts() {
-    const res = await fetch('/api/accounts');
-    if (!res.ok) throw await apiError(res);
-    return (await res.json()).accounts;
-  },
-  async taxrates() {
-    const res = await fetch('/api/taxrates');
-    if (!res.ok) throw await apiError(res);
-    return (await res.json()).taxRates;
-  },
-  async createInvoice(payload) {
-    const res = await fetch('/api/invoices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.message || 'Failed to create invoice');
-    return body;
-  },
-  async disconnect() { return fetch('/disconnect', { method: 'POST' }); },
-  async xeroInvoices(params) {
-    const qs = new URLSearchParams(params || {}).toString();
-    const res = await fetch('/api/xero-invoices' + (qs ? '?' + qs : ''));
-    if (!res.ok) throw await apiError(res);
-    return (await res.json()).invoices;
-  },
-};
-
-async function apiError(res) {
-  try {
-    const body = await res.json();
-    const err = new Error(body.message || ('Request failed (' + res.status + ')'));
-    err.code = body.error || null;
-    return err;
-  } catch (e) {
-    return new Error('Request failed (' + res.status + ')');
-  }
-}
-
-let XERO_STATUS = { hasCredentials: false, connected: false, org: null };
-let XERO_ITEMS_CACHE = null;
-
 /* =========================================================================
    Banners
    ========================================================================= */
@@ -1375,7 +1217,7 @@ function showTab(name) {
   if (name === 'time') renderTime();
   if (name === 'materials') renderMaterials();
   if (name === 'clients') renderClients();
-  if (name === 'invoice') { renderInvoiceClientOptions(); renderInvoicesList(); }
+  if (name === 'invoice') renderInvoiceClientOptions();
   if (name === 'timesheet') renderTimesheetTab();
   if (name === 'settings') renderSettings();
 }
@@ -1419,40 +1261,14 @@ function renderOverview() {
   const range = overviewPeriodRange();
   const periodLabel = overviewPeriodLabel(range);
 
-  // --- Money (unaffected by the period selector — see design note: Overdue/
-  // Awaiting payment are point-in-time regardless of which range is picked) ---
+  // --- Money (unaffected by the period selector) ---
   const totalUnbilled = STATE.clients.reduce((sum, c) => sum + unbilledAmountForClient(c.id), 0)
     + unbilledAmountForClient(null); // entries with no client (shouldn't normally happen)
-
-  const thisMonth = todayISO().slice(0, 7); // YYYY-MM
-  let awaitingPayment = 0;
-  let overdue = 0;
-  let paidThisMonth = 0;
-  for (const rec of STATE.invoices) {
-    const friendly = invoiceFriendlyStatus(rec);
-    if (friendly === 'Awaiting payment') awaitingPayment += rec.amountDue || 0;
-    else if (friendly === 'Overdue') overdue += rec.amountDue || 0;
-    else if (friendly === 'Paid' && rec.fullyPaidOnDate && rec.fullyPaidOnDate.slice(0, 7) === thisMonth) {
-      paidThisMonth += rec.amountPaid || rec.total || 0;
-    }
-  }
 
   document.getElementById('ovUnbilledTotal').innerHTML = `
     <div class="stat">
       <div class="label">Total unbilled</div>
       <div class="value num">${formatMoney(totalUnbilled)}</div>
-    </div>
-    <div class="stat">
-      <div class="label">Awaiting payment</div>
-      <div class="value num">${formatMoney(awaitingPayment)}</div>
-    </div>
-    <div class="stat">
-      <div class="label">Overdue</div>
-      <div class="value num" style="${overdue > 0 ? 'color:var(--danger);' : ''}">${formatMoney(overdue)}</div>
-    </div>
-    <div class="stat">
-      <div class="label">Paid this month</div>
-      <div class="value num">${formatMoney(paidThisMonth)}</div>
     </div>
   `;
 
@@ -1466,52 +1282,30 @@ function renderOverview() {
   const billedMinutes = periodEntries.filter((t) => t.billable).reduce((s, t) => s + timeEntryBilledMinutes(t), 0);
   document.getElementById('ovBilledTime').textContent = formatDuration(billedMinutes);
 
-  // --- Revenue by Client: Open / Paid / Total Invoices / Unbilled, all scoped to the same period ---
+  // --- Revenue by Client: Unbilled, scoped to the same period ---
   document.getElementById('ovRevenuePeriodLabel').textContent = periodLabel;
 
   const revenueRows = STATE.clients
-    .map((c) => {
-      const clientInvoices = STATE.invoices.filter((rec) =>
-        rec.clientId === c.id
-        && rec.date >= range.from && rec.date <= range.to
-        && invoiceFriendlyStatus(rec) !== 'Voided'
-      );
-      const open = Billing.round2(clientInvoices.reduce((s, rec) => s + (rec.amountDue || 0), 0));
-      const paid = Billing.round2(clientInvoices.reduce((s, rec) => s + (rec.amountPaid || 0), 0));
-      const totalInvoices = Billing.round2(clientInvoices.reduce((s, rec) => s + (rec.total || 0), 0));
-      const unbilled = Billing.round2(unbilledAmountForClient(c.id, range));
-      return { name: c.name, open, paid, totalInvoices, unbilled };
-    })
-    .filter((r) => r.open > 0 || r.paid > 0 || r.totalInvoices > 0 || r.unbilled > 0)
-    .sort((a, b) => b.totalInvoices - a.totalInvoices);
+    .map((c) => ({ name: c.name, unbilled: Billing.round2(unbilledAmountForClient(c.id, range)) }))
+    .filter((r) => r.unbilled > 0)
+    .sort((a, b) => b.unbilled - a.unbilled);
 
   const moneyCell = (v) => (v > 0 ? formatMoney(v) : '<span class="muted">—</span>');
   const tbody = document.getElementById('ovByClient');
   const tfoot = document.getElementById('ovByClientFoot');
   if (!revenueRows.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nothing to show for this period.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="2">Nothing to show for this period.</td></tr>';
     tfoot.innerHTML = '';
   } else {
     tbody.innerHTML = revenueRows.map((r) => `<tr>
         <td>${escapeHtml(r.name)}</td>
-        <td class="num">${moneyCell(r.open)}</td>
-        <td class="num">${moneyCell(r.paid)}</td>
-        <td class="num">${moneyCell(r.totalInvoices)}</td>
         <td class="num">${moneyCell(r.unbilled)}</td>
       </tr>`).join('');
 
-    const totals = revenueRows.reduce((acc, r) => ({
-      open: acc.open + r.open,
-      paid: acc.paid + r.paid,
-      totalInvoices: acc.totalInvoices + r.totalInvoices,
-      unbilled: acc.unbilled + r.unbilled,
-    }), { open: 0, paid: 0, totalInvoices: 0, unbilled: 0 });
+    const totalUnbilledByClient = revenueRows.reduce((s, r) => s + r.unbilled, 0);
     tfoot.innerHTML = `<tr>
         <td style="font-weight:700;">Total</td>
-        <td class="num" style="font-weight:700;">${formatMoney(totals.open)}</td>
-        <td class="num" style="font-weight:700;">${formatMoney(totals.paid)}</td>
-        <td class="num" style="font-weight:700;">${formatMoney(totals.totalInvoices)}</td>
-        <td class="num" style="font-weight:700;">${formatMoney(totals.unbilled)}</td>
+        <td class="num" style="font-weight:700;">${formatMoney(totalUnbilledByClient)}</td>
       </tr>`;
   }
 }
@@ -1528,104 +1322,6 @@ function populateClientSelect(sel, includeAllOption) {
   sel.innerHTML = (includeAllOption ? '<option value="">All clients</option>' : '<option value="" disabled selected>Select a client</option>')
     + STATE.clients.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   if (cur) sel.value = cur;
-}
-
-/** Fetch Xero items into XERO_ITEMS_CACHE. Safe to call repeatedly (manual refresh). */
-async function syncXeroItems() {
-  if (!XERO_STATUS.connected) { XERO_ITEMS_CACHE = null; return false; }
-  try {
-    XERO_ITEMS_CACHE = await Api.items();
-    return true;
-  } catch (e) {
-    console.error('syncXeroItems failed', e);
-    return false;
-  }
-}
-
-/**
- * Fetch Xero contacts and upsert them directly into STATE.clients, keyed by
- * xeroContactId, so the Time/Materials Client dropdown lists Xero contacts
- * without a manual linking step. Existing rate/increment overrides are kept;
- * manually-added, unlinked clients are untouched.
- */
-async function syncXeroContacts() {
-  if (!XERO_STATUS.connected) return false;
-  try {
-    const contacts = await Api.contacts();
-    let changed = false;
-    for (const c of contacts) {
-      const existing = STATE.clients.find((cl) => cl.xeroContactId === c.contactId);
-      if (existing) {
-        if (existing.name !== c.name || existing.xeroContactName !== c.name || existing.email !== (c.email || '')) {
-          existing.name = c.name;
-          existing.xeroContactName = c.name;
-          existing.email = c.email || '';
-          changed = true;
-        }
-      } else {
-        STATE.clients.push({
-          id: c.contactId,
-          name: c.name,
-          xeroContactId: c.contactId,
-          xeroContactName: c.name,
-          email: c.email || '',
-          rate: null,
-          increment: null,
-        });
-        changed = true;
-      }
-    }
-    if (changed) await persist();
-    return true;
-  } catch (e) {
-    console.error('syncXeroContacts failed', e);
-    return false;
-  }
-}
-
-/**
- * Refresh status/amounts for every Weftly-created invoice still on record,
- * by ID (never pulls the whole Xero invoice history). Returns a result
- * object so callers can distinguish a missing-scope failure from any other.
- */
-async function syncXeroInvoices() {
-  if (!XERO_STATUS.connected) return { ok: false };
-  const trackedIds = STATE.invoices.map((r) => r.xeroInvoiceId).filter(Boolean);
-  if (!trackedIds.length) return { ok: true };
-  try {
-    const remote = await Api.xeroInvoices({ ids: trackedIds.join(',') });
-    const byId = new Map(remote.map((r) => [r.invoiceID, r]));
-    const now = new Date().toISOString();
-    for (const rec of STATE.invoices) {
-      const fresh = byId.get(rec.xeroInvoiceId);
-      if (!fresh) continue; // Xero has no matching record right now — leave the last-known state alone
-      rec.status = fresh.status;
-      rec.total = fresh.total;
-      rec.amountDue = fresh.amountDue;
-      rec.amountPaid = fresh.amountPaid;
-      rec.fullyPaidOnDate = fresh.fullyPaidOnDate;
-      rec.deepLink = fresh.deepLink;
-      rec.invoiceNumber = fresh.invoiceNumber || rec.invoiceNumber;
-      rec.lastSynced = now;
-    }
-    await persist();
-    return { ok: true };
-  } catch (e) {
-    console.error('syncXeroInvoices failed', e);
-    return { ok: false, insufficientScope: e.code === 'insufficient_scope', message: e.message };
-  }
-}
-
-/** Populate a Xero item <select> synchronously from the already-fetched cache. */
-function populateItemSelect(sel) {
-  sel.innerHTML = '<option value="">—</option>';
-  if (!XERO_ITEMS_CACHE) return;
-  for (const it of XERO_ITEMS_CACHE) {
-    const opt = document.createElement('option');
-    opt.value = it.itemCode;
-    opt.textContent = `${it.itemCode} — ${it.name}`;
-    sel.appendChild(opt);
-  }
 }
 
 /**
@@ -1779,7 +1475,6 @@ function updateTimePreview() {
 function renderTime() {
   populateClientSelect(document.getElementById('timeClient'), false);
   populateClientSelect(document.getElementById('timeFilterClient'), true);
-  populateItemSelect(document.getElementById('timeItem'));
 
   if (!document.getElementById('timeDate').value) document.getElementById('timeDate').value = todayISO();
   if (!timeEditingId) {
@@ -1817,7 +1512,7 @@ function renderTime() {
     return `<tr>
       <td>${formatDate(t.date)}</td>
       <td>${escapeHtml(c ? c.name : '—')}</td>
-      <td>${escapeHtml(t.description)}${t.xeroItemCode ? ` <span class="muted">[${escapeHtml(t.xeroItemCode)}]</span>` : ''}</td>
+      <td>${escapeHtml(t.description)}</td>
       <td class="num">${formatDuration(t.minutes)}</td>
       <td class="num">${formatDuration(billed)}</td>
       <td class="num">${formatMoney(t.rate)}</td>
@@ -1851,14 +1546,13 @@ function loadTimeEntryIntoForm(id) {
   const t = STATE.time.find((x) => x.id === id);
   if (!t) return;
   if (t.invoiced) {
-    showBanner('This entry is already on a Xero invoice — unmark it first if it really needs to change.', 'err', 6000);
+    showBanner('This entry is already marked invoiced — unmark it first if it really needs to change.', 'err', 6000);
     return;
   }
   timeEditingId = id;
-  // Switch tabs (which re-renders and rebuilds the client/item <select> option
-  // lists) BEFORE setting field values below — populateItemSelect() doesn't
-  // preserve the previous selection the way populateClientSelect() does, so
-  // setting these values first would just get clobbered by the re-render.
+  // Switch tabs (which re-renders and rebuilds the client <select> option
+  // list) BEFORE setting field values below — populateClientSelect() preserves
+  // the previous selection, but the re-render still needs to happen first.
   showTab('time');
   document.getElementById('timeId').value = t.id;
   document.getElementById('timeClient').value = t.clientId;
@@ -1880,7 +1574,6 @@ function loadTimeEntryIntoForm(id) {
   document.getElementById('timeRate').value = t.rate;
   document.getElementById('timeIncrement').value = t.increment;
   document.getElementById('timeBillable').checked = t.billable;
-  document.getElementById('timeItem').value = t.xeroItemCode || '';
   document.getElementById('timeFormTitle').textContent = 'Edit time entry';
   document.getElementById('timeSubmitBtn').textContent = 'Update entry';
   document.getElementById('timeCancelEdit').style.display = '';
@@ -1928,21 +1621,16 @@ function wireTimeTab() {
       rate,
       increment,
       billable: document.getElementById('timeBillable').checked,
-      xeroItemCode: document.getElementById('timeItem').value || null,
       entryMode: mode,
       clockStart: mode === 'clock' ? canonicalClockValue(document.getElementById('timeStart').value) : null,
       clockEnd: mode === 'clock' ? canonicalClockValue(document.getElementById('timeEnd').value) : null,
       clockBreakMinutes: mode === 'clock' ? (Number(document.getElementById('timeBreak').value) || 0) : null,
       invoiced: false,
-      xeroInvoiceId: null,
-      invoiceNumber: null,
     };
 
     if (timeEditingId) {
       const idx = STATE.time.findIndex((x) => x.id === timeEditingId);
       entry.invoiced = STATE.time[idx].invoiced;
-      entry.xeroInvoiceId = STATE.time[idx].xeroInvoiceId;
-      entry.invoiceNumber = STATE.time[idx].invoiceNumber;
       STATE.time[idx] = entry;
     } else {
       STATE.time.push(entry);
@@ -2016,7 +1704,7 @@ function wireTimeTab() {
     }
     if (btn.dataset.action === 'unmark-time') {
       const t = STATE.time.find((x) => x.id === id);
-      if (t) { t.invoiced = false; t.xeroInvoiceId = null; t.invoiceNumber = null; await persist(); renderTime(); renderOverview(); }
+      if (t) { t.invoiced = false; await persist(); renderTime(); renderOverview(); }
     }
   });
 
@@ -2033,7 +1721,6 @@ let matEditingId = null;
 
 function renderMaterials() {
   populateClientSelect(document.getElementById('matClient'), false);
-  populateItemSelect(document.getElementById('matItem'));
   if (!document.getElementById('matDate').value) document.getElementById('matDate').value = todayISO();
   if (document.getElementById('matMarkup').value === '') {
     document.getElementById('matMarkup').placeholder = String(STATE.settings.defaultMarkup);
@@ -2058,7 +1745,7 @@ function renderMaterials() {
     return `<tr>
       <td>${formatDate(m.date)}</td>
       <td>${escapeHtml(c ? c.name : '—')}</td>
-      <td>${escapeHtml(m.description)}${m.xeroItemCode ? ` <span class="muted">[${escapeHtml(m.xeroItemCode)}]</span>` : ''}</td>
+      <td>${escapeHtml(m.description)}</td>
       <td class="num">${m.qty}</td>
       <td class="num">${formatMoney(m.unitCost)}</td>
       <td class="num">${(m.markupPct || 0)}%</td>
@@ -2092,7 +1779,6 @@ function loadMatEntryIntoForm(id) {
   document.getElementById('matUnitCost').value = m.unitCost;
   document.getElementById('matMarkup').value = m.markupPct;
   document.getElementById('matBillable').checked = m.billable;
-  document.getElementById('matItem').value = m.xeroItemCode || '';
   document.getElementById('matFormTitle').textContent = 'Edit material';
   document.getElementById('matCancelEdit').style.display = '';
   showTab('materials');
@@ -2113,16 +1799,11 @@ function wireMaterialsTab() {
       unitCost: Number(document.getElementById('matUnitCost').value) || 0,
       markupPct: markupRaw !== '' ? Number(markupRaw) : Number(STATE.settings.defaultMarkup) || 0,
       billable: document.getElementById('matBillable').checked,
-      xeroItemCode: document.getElementById('matItem').value || null,
       invoiced: false,
-      xeroInvoiceId: null,
-      invoiceNumber: null,
     };
     if (matEditingId) {
       const idx = STATE.materials.findIndex((x) => x.id === matEditingId);
       entry.invoiced = STATE.materials[idx].invoiced;
-      entry.xeroInvoiceId = STATE.materials[idx].xeroInvoiceId;
-      entry.invoiceNumber = STATE.materials[idx].invoiceNumber;
       STATE.materials[idx] = entry;
     } else {
       STATE.materials.push(entry);
@@ -2148,7 +1829,7 @@ function wireMaterialsTab() {
     }
     if (btn.dataset.action === 'unmark-mat') {
       const m = STATE.materials.find((x) => x.id === id);
-      if (m) { m.invoiced = false; m.xeroInvoiceId = null; m.invoiceNumber = null; await persist(); renderMaterials(); renderOverview(); }
+      if (m) { m.invoiced = false; await persist(); renderMaterials(); renderOverview(); }
     }
   });
 }
@@ -2158,34 +1839,15 @@ function wireMaterialsTab() {
    ========================================================================= */
 let clientEditingId = null;
 
-async function populateXeroContactSelect() {
-  const sel = document.getElementById('clientXeroContact');
-  sel.innerHTML = '<option value="">Not linked</option>';
-  if (!XERO_STATUS.connected) return;
-  try {
-    const contacts = await Api.contacts();
-    for (const c of contacts) {
-      const opt = document.createElement('option');
-      opt.value = c.contactId;
-      opt.textContent = c.name;
-      opt.dataset.name = c.name;
-      opt.dataset.email = c.email || '';
-      sel.appendChild(opt);
-    }
-  } catch (e) { /* non-fatal */ }
-}
-
 function renderClients() {
-  populateXeroContactSelect();
   const tbody = document.getElementById('clientRows');
   if (!STATE.clients.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No clients yet — add one above.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No clients yet — add one above.</td></tr>';
     return;
   }
   tbody.innerHTML = STATE.clients.map((c) => `
     <tr>
       <td>${escapeHtml(c.name)}</td>
-      <td>${c.xeroContactName ? escapeHtml(c.xeroContactName) : '<span class="muted">—</span>'}</td>
       <td class="num">${c.rate != null && c.rate !== '' ? formatMoney(c.rate) : '<span class="muted">default</span>'}</td>
       <td class="num">${c.increment != null && c.increment !== '' ? c.increment : '<span class="muted">default</span>'}</td>
       <td class="num">${formatMoney(unbilledAmountForClient(c.id))}</td>
@@ -2216,25 +1878,18 @@ function loadClientIntoForm(id) {
   document.getElementById('clientIncrement').value = c.increment != null ? c.increment : '';
   document.getElementById('clientFormTitle').textContent = 'Edit client';
   document.getElementById('clientCancelEdit').style.display = '';
-  populateXeroContactSelect().then(() => {
-    document.getElementById('clientXeroContact').value = c.xeroContactId || '';
-  });
   showTab('clients');
 }
 
 function wireClientsTab() {
   document.getElementById('clientForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const sel = document.getElementById('clientXeroContact');
-    const opt = sel.selectedOptions[0];
     const rateRaw = document.getElementById('clientRate').value;
     const incRaw = document.getElementById('clientIncrement').value;
     const entry = {
       id: clientEditingId || uid(),
       name: document.getElementById('clientName').value.trim(),
       email: document.getElementById('clientEmail').value.trim() || null,
-      xeroContactId: sel.value || null,
-      xeroContactName: sel.value ? (opt.dataset.name || opt.textContent) : null,
       rate: rateRaw !== '' ? Number(rateRaw) : null,
       increment: incRaw !== '' ? Number(incRaw) : null,
     };
@@ -2251,13 +1906,6 @@ function wireClientsTab() {
   });
 
   document.getElementById('clientCancelEdit').addEventListener('click', () => { resetClientForm(); renderClients(); });
-
-  document.getElementById('clientXeroContact').addEventListener('change', (e) => {
-    const emailField = document.getElementById('clientEmail');
-    const opt = e.target.selectedOptions[0];
-    // Only autofill — never clobber an email the user already typed/edited.
-    if (opt && opt.dataset.email && !emailField.value) emailField.value = opt.dataset.email;
-  });
 
   document.getElementById('clientRows').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
@@ -2307,9 +1955,8 @@ function buildLineItems(time, materials) {
       description: `${formatDate(t.date)} — ${t.description}`,
       quantity: hours,
       unitAmount: Billing.round2(t.rate),
-      accountCode: t.xeroItemCode ? null : (STATE.settings.xeroAccountCode || ''),
-      taxType: t.xeroItemCode ? null : (STATE.settings.xeroTaxType || ''),
-      itemCode: t.xeroItemCode || null,
+      accountCode: STATE.settings.xeroAccountCode || '',
+      taxType: STATE.settings.xeroTaxType || '',
     });
   }
   for (const m of materials) {
@@ -2318,9 +1965,8 @@ function buildLineItems(time, materials) {
       description: `${formatDate(m.date)} — ${m.description}`,
       quantity: m.qty,
       unitAmount: Billing.round2(m.unitCost * (1 + (m.markupPct || 0) / 100)),
-      accountCode: m.xeroItemCode ? null : (STATE.settings.xeroAccountCode || ''),
-      taxType: m.xeroItemCode ? null : (STATE.settings.xeroTaxType || ''),
-      itemCode: m.xeroItemCode || null,
+      accountCode: STATE.settings.xeroAccountCode || '',
+      taxType: STATE.settings.xeroTaxType || '',
     });
   }
   return lines;
@@ -2334,7 +1980,7 @@ function renderInvoicePreview() {
   } else {
     tbody.innerHTML = lines.map((l) => `
       <tr>
-        <td>${escapeHtml(l.description)}${l.itemCode ? ` <span class="muted">[${escapeHtml(l.itemCode)}]</span>` : ''}</td>
+        <td>${escapeHtml(l.description)}</td>
         <td class="num">${l.quantity}</td>
         <td class="num">${formatMoney(l.unitAmount)}</td>
         <td class="num">${formatMoney(l.quantity * l.unitAmount)}</td>
@@ -2345,76 +1991,20 @@ function renderInvoicePreview() {
   document.getElementById('invTotal').textContent = formatMoney(total);
   document.getElementById('invPreviewCard').style.display = '';
 
-  const c = clientById(currentPreview.clientId);
-  const hint = [];
-  if (!XERO_STATUS.connected) hint.push('Not connected to Xero — draft creation is disabled. Use the CSV export instead.');
-  else if (!c.xeroContactId) hint.push('This client isn’t linked to a Xero contact — link one in the Clients tab to create a draft.');
-  document.getElementById('invHint').textContent = hint.join(' ');
-  document.getElementById('invCreateDraft').disabled = !XERO_STATUS.connected || !c.xeroContactId || !lines.length;
   document.getElementById('invDownloadCsv').disabled = !lines.length;
+  document.getElementById('invDownloadQbCsv').disabled = !lines.length;
 }
 
-function markPreviewInvoiced(xeroInvoiceId, invoiceNumber) {
+function markPreviewInvoiced() {
   for (const l of currentPreview.lineItems) {
     if (l.kind === 'time') {
       const t = STATE.time.find((x) => x.id === l.sourceId);
-      if (t) { t.invoiced = true; t.xeroInvoiceId = xeroInvoiceId || null; t.invoiceNumber = invoiceNumber || null; }
+      if (t) t.invoiced = true;
     } else {
       const m = STATE.materials.find((x) => x.id === l.sourceId);
-      if (m) { m.invoiced = true; m.xeroInvoiceId = xeroInvoiceId || null; m.invoiceNumber = invoiceNumber || null; }
+      if (m) m.invoiced = true;
     }
   }
-}
-
-function renderInvoicesList() {
-  const tbody = document.getElementById('invoiceListRows');
-  const rows = STATE.invoices.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-  if (!rows.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No invoices created from Weftly yet.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = rows.map((rec) => {
-    const c = clientById(rec.clientId);
-    const friendly = invoiceFriendlyStatus(rec);
-    const pillClass = invoiceStatusPillClass(friendly);
-    const voided = friendly === 'Voided';
-    const returnAction = voided && !rec.returnedToUnbilled
-      ? `<button class="link-btn" data-action="return-unbilled" data-id="${rec.xeroInvoiceId}">Return entries to unbilled?</button>`
-      : (voided && rec.returnedToUnbilled ? '<span class="muted">Returned to unbilled</span>' : '');
-    return `<tr>
-      <td>${escapeHtml(rec.invoiceNumber || '—')}</td>
-      <td>${escapeHtml(c ? c.name : '—')}</td>
-      <td>${formatDate(rec.date)}</td>
-      <td>${formatDate(rec.dueDate)}</td>
-      <td><span class="pill ${pillClass}">${escapeHtml(friendly)}</span></td>
-      <td class="num">${formatMoney(rec.total)}</td>
-      <td class="num">${formatMoney(rec.amountDue)}</td>
-      <td>
-        ${rec.deepLink ? `<a href="${rec.deepLink}" target="_blank" rel="noopener">Open in Xero</a>` : ''}
-        ${returnAction}
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-/**
- * Non-destructive recovery for invoices Xero reports as voided/deleted: the
- * user opts in per-invoice rather than Weftly silently moving entries back.
- */
-async function returnEntriesToUnbilled(xeroInvoiceId) {
-  const rec = STATE.invoices.find((r) => r.xeroInvoiceId === xeroInvoiceId);
-  if (!rec) return;
-  if (!confirm('Return this invoice’s time and material entries to unbilled? The invoice record stays on file, marked voided.')) return;
-  for (const entryId of rec.entryIds || []) {
-    const t = STATE.time.find((x) => x.id === entryId);
-    if (t) { t.invoiced = false; t.xeroInvoiceId = null; t.invoiceNumber = null; }
-    const m = STATE.materials.find((x) => x.id === entryId);
-    if (m) { m.invoiced = false; m.xeroInvoiceId = null; m.invoiceNumber = null; }
-  }
-  rec.returnedToUnbilled = true;
-  await persist();
-  renderInvoicesList(); renderTime(); renderMaterials(); renderOverview(); renderClients();
-  showBanner('Entries returned to unbilled.', 'ok', 4000);
 }
 
 function csvEscape(v) {
@@ -2425,9 +2015,9 @@ function csvEscape(v) {
 
 /**
  * Shared CSV writer — UTF-8 BOM + \r\n line endings + proper quoting, so
- * Excel opens these cleanly. Used by both the Xero-import CSV (Invoice tab)
- * and the human-readable Data exports (Settings), so there's exactly one
- * place that knows how to write a CSV file.
+ * Excel opens these cleanly. Used by both invoice export formats (Invoice
+ * tab) and the human-readable Data exports (Settings), so there's exactly
+ * one place that knows how to write a CSV file.
  */
 function downloadCsvFile(filename, header, rows) {
   const lines = [header, ...rows].map((r) => r.map(csvEscape).join(',')).join('\r\n') + '\r\n';
@@ -2443,6 +2033,7 @@ function downloadCsvFile(filename, header, rows) {
   URL.revokeObjectURL(url);
 }
 
+/** Xero's bulk invoice import layout: one row per line item, account code + tax type per row. */
 function downloadCsvForPreview() {
   const c = clientById(currentPreview.clientId);
   const invoiceNumber = ''; // left blank so Xero auto-assigns on import
@@ -2453,10 +2044,37 @@ function downloadCsvForPreview() {
   const header = ['ContactName', 'EmailAddress', 'InvoiceNumber', 'Reference', 'InvoiceDate', 'DueDate', 'Description', 'Quantity', 'UnitAmount', 'AccountCode', 'TaxType'];
   const rows = currentPreview.lineItems.map((l) => ([
     c.name, '', invoiceNumber, reference, invDate, dueDate, l.description, l.quantity, l.unitAmount.toFixed(2),
-    l.itemCode ? '' : (l.accountCode || ''), l.itemCode ? '' : (l.taxType || ''),
+    l.accountCode || '', l.taxType || '',
   ]));
 
-  downloadCsvFile(`weftly-invoice-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
+  downloadCsvFile(`weftly-invoice-xero-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
+}
+
+/** QuickBooks Online's invoice import layout: one row per line item, sharing Customer/dates/Invoice No. */
+function downloadQbCsvForPreview() {
+  const c = clientById(currentPreview.clientId);
+  const invoiceNo = document.getElementById('invReference').value.trim();
+  const invDate = document.getElementById('invDate').value || todayISO();
+  const dueDate = document.getElementById('invDue').value || addDaysISO(invDate, Number(STATE.settings.termsDays) || 0);
+
+  const header = ['Customer', 'Invoice Date', 'Due Date', 'Invoice No', 'Item(Product/Service)', 'Item Description', 'Item Quantity', 'Item Rate', 'Item Amount'];
+  const rows = currentPreview.lineItems.map((l) => ([
+    c.name, invDate, dueDate, invoiceNo, '', l.description, l.quantity, l.unitAmount.toFixed(2), (l.quantity * l.unitAmount).toFixed(2),
+  ]));
+
+  downloadCsvFile(`weftly-invoice-quickbooks-${c.name.replace(/[^a-z0-9]+/gi, '-')}-${invDate}.csv`, header, rows);
+}
+
+function afterCsvDownload() {
+  if (confirm('Mark these entries as invoiced now that you’ve exported the CSV?')) {
+    markPreviewInvoiced();
+    persist();
+    renderInvoicePreview();
+    renderTime(); renderMaterials(); renderOverview(); renderClients();
+    showBanner('CSV downloaded and entries marked invoiced.', 'ok', 5000);
+  } else {
+    showBanner('CSV downloaded. Entries left as unbilled.', 'info', 5000);
+  }
 }
 
 function wireInvoiceTab() {
@@ -2474,87 +2092,13 @@ function wireInvoiceTab() {
   document.getElementById('invDownloadCsv').addEventListener('click', () => {
     if (!currentPreview || !currentPreview.lineItems.length) return;
     downloadCsvForPreview();
-    if (confirm('Mark these entries as invoiced now that you’ve exported the CSV?')) {
-      markPreviewInvoiced(null, null);
-      persist();
-      renderInvoicePreview();
-      renderTime(); renderMaterials(); renderOverview(); renderClients();
-      showBanner('CSV downloaded and entries marked invoiced.', 'ok', 5000);
-    } else {
-      showBanner('CSV downloaded. Entries left as unbilled.', 'info', 5000);
-    }
+    afterCsvDownload();
   });
 
-  document.getElementById('invCreateDraft').addEventListener('click', async () => {
+  document.getElementById('invDownloadQbCsv').addEventListener('click', () => {
     if (!currentPreview || !currentPreview.lineItems.length) return;
-    const c = clientById(currentPreview.clientId);
-    const btn = document.getElementById('invCreateDraft');
-    btn.disabled = true;
-    btn.textContent = 'Creating…';
-    try {
-      const payload = {
-        contactId: c.xeroContactId,
-        contactName: c.xeroContactId ? undefined : c.name,
-        date: document.getElementById('invDate').value || todayISO(),
-        dueDate: document.getElementById('invDue').value || undefined,
-        reference: document.getElementById('invReference').value.trim() || undefined,
-        lineItems: currentPreview.lineItems.map((l) => ({
-          description: l.description,
-          quantity: l.quantity,
-          unitAmount: l.unitAmount,
-          accountCode: l.accountCode || undefined,
-          taxType: l.taxType || undefined,
-          itemCode: l.itemCode || undefined,
-        })),
-      };
-      const result = await Api.createInvoice(payload);
-      markPreviewInvoiced(result.invoiceId, result.invoiceNumber);
-      STATE.invoices.push({
-        xeroInvoiceId: result.invoiceId,
-        invoiceNumber: result.invoiceNumber,
-        clientId: currentPreview.clientId,
-        entryIds: currentPreview.lineItems.map((l) => l.sourceId),
-        total: result.total,
-        date: document.getElementById('invDate').value || todayISO(),
-        dueDate: document.getElementById('invDue').value || null,
-        status: result.status || 'DRAFT',
-        amountDue: result.total,
-        amountPaid: 0,
-        fullyPaidOnDate: null,
-        deepLink: result.deepLink,
-        returnedToUnbilled: false,
-        lastSynced: null,
-      });
-      await persist();
-      renderInvoicePreview(); renderTime(); renderMaterials(); renderOverview(); renderClients(); renderInvoicesList();
-      document.getElementById('globalBanner').innerHTML = `<div class="banner ok">Draft invoice ${escapeHtml(result.invoiceNumber || '')} created in Xero (${formatMoney(result.total)}). <a href="${result.deepLink}" target="_blank" rel="noopener">Open in Xero →</a></div>`;
-      await syncXeroInvoices(); // pick up authoritative status right after creation
-      renderInvoicesList(); renderOverview();
-    } catch (err) {
-      showBanner('Xero rejected the invoice: ' + err.message, 'err');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Create draft in Xero';
-    }
-  });
-
-  document.getElementById('invoiceListRows').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-action="return-unbilled"]');
-    if (btn) returnEntriesToUnbilled(btn.dataset.id);
-  });
-
-  document.getElementById('refreshInvoicesBtn').addEventListener('click', async (e) => {
-    const btn = e.target;
-    if (!XERO_STATUS.connected) { showBanner('Not connected to Xero.', 'err', 4000); return; }
-    btn.disabled = true;
-    btn.textContent = 'Refreshing…';
-    const result = await syncXeroInvoices();
-    renderInvoicesList(); renderOverview();
-    btn.disabled = false;
-    btn.textContent = 'Refresh from Xero';
-    if (result.ok) showBanner('Invoice statuses refreshed.', 'ok', 3000);
-    else if (result.insufficientScope) showBanner(result.message, 'err');
-    else showBanner('Could not refresh invoice statuses' + (result.message ? ': ' + result.message : '.'), 'err', 5000);
+    downloadQbCsvForPreview();
+    afterCsvDownload();
   });
 }
 
@@ -2850,7 +2394,7 @@ function exportJsonBackup() {
 }
 
 function exportTimeCsv() {
-  const header = ['Date', 'Client', 'Description', 'Start', 'End', 'Break (min)', 'Actual hours', 'Billed hours', 'Rate', 'Amount', 'Billable', 'Invoiced', 'Invoice #'];
+  const header = ['Date', 'Client', 'Description', 'Start', 'End', 'Break (min)', 'Actual hours', 'Billed hours', 'Rate', 'Amount', 'Billable', 'Invoiced'];
   const rows = STATE.time.map((t) => {
     const c = clientById(t.clientId);
     const isClock = t.entryMode === 'clock';
@@ -2867,7 +2411,6 @@ function exportTimeCsv() {
       timeEntryAmount(t).toFixed(2),
       t.billable ? 'Yes' : 'No',
       t.invoiced ? 'Yes' : 'No',
-      t.invoiceNumber || '',
     ];
   });
   downloadCsvFile(`weftly-time-${todayISO()}.csv`, header, rows);
@@ -2903,33 +2446,14 @@ function exportClientsCsv() {
   downloadCsvFile(`weftly-clients-${todayISO()}.csv`, header, rows);
 }
 
-function exportInvoicesCsv() {
-  const header = ['Number', 'Client', 'Invoice date', 'Due date', 'Status', 'Total', 'Outstanding', 'Paid'];
-  const rows = STATE.invoices.map((rec) => {
-    const c = clientById(rec.clientId);
-    return [
-      rec.invoiceNumber || '',
-      c ? c.name : '',
-      formatDate(rec.date),
-      formatDate(rec.dueDate),
-      invoiceFriendlyStatus(rec),
-      Number(rec.total || 0).toFixed(2),
-      Number(rec.amountDue || 0).toFixed(2),
-      Number(rec.amountPaid || 0).toFixed(2),
-    ];
-  });
-  downloadCsvFile(`weftly-invoices-${todayISO()}.csv`, header, rows);
-}
-
 function exportAllCsv() {
   exportTimeCsv();
   exportMaterialsCsv();
   exportClientsCsv();
-  exportInvoicesCsv();
 }
 
 /* ---- Reset data panel ---- */
-const RESET_CHECKBOX_IDS = ['resetTime', 'resetMaterials', 'resetClients', 'resetInvoices', 'resetSettings'];
+const RESET_CHECKBOX_IDS = ['resetTime', 'resetMaterials', 'resetClients', 'resetSettings'];
 
 function updateResetWarning() {
   const el = document.getElementById('resetWarning');
@@ -2969,7 +2493,6 @@ async function executeReset() {
   if (flags.resetTime) { cleared.push(`${STATE.time.length} time entries`); STATE.time = []; }
   if (flags.resetMaterials) { cleared.push(`${STATE.materials.length} materials`); STATE.materials = []; }
   if (flags.resetClients) { cleared.push(`${STATE.clients.length} clients`); STATE.clients = []; }
-  if (flags.resetInvoices) { cleared.push(`${STATE.invoices.length} recorded invoices`); STATE.invoices = []; }
   if (flags.resetSettings) {
     cleared.push('settings (back to defaults)');
     STATE.settings = defaultState().settings;
@@ -2988,7 +2511,7 @@ async function executeReset() {
 
   closeResetPanel();
   renderAll();
-  showBanner(`Cleared: ${cleared.join(', ')}. Xero connection was kept — clients and items simply re-pull from Xero.`, 'ok', 6000);
+  showBanner(`Cleared: ${cleared.join(', ')}.`, 'ok', 6000);
 }
 
 function renderSettings() {
@@ -3012,78 +2535,8 @@ function renderSettings() {
   document.getElementById('ctPayment').value = ct.paymentInstructions || '';
   document.getElementById('ctNote').value = ct.note || '';
 
-  renderXeroPanel();
-  populateAccountAndTaxSelects();
-}
-
-async function populateAccountAndTaxSelects() {
-  const accSel = document.getElementById('setAccountCode');
-  const taxSel = document.getElementById('setTaxType');
-  const savedAcc = STATE.settings.xeroAccountCode;
-  const savedTax = STATE.settings.xeroTaxType;
-
-  if (XERO_STATUS.connected) {
-    try {
-      const accounts = await Api.accounts();
-      accSel.innerHTML = '<option value="">— select —</option>' + accounts.map((a) =>
-        `<option value="${escapeHtml(a.code)}">${escapeHtml(a.code)} — ${escapeHtml(a.name)}</option>`).join('');
-      accSel.value = savedAcc || '';
-    } catch (e) { /* fall through to manual entry below */ }
-    try {
-      const taxRates = await Api.taxrates();
-      taxSel.innerHTML = '<option value="">— select —</option>' + taxRates.map((t) =>
-        `<option value="${escapeHtml(t.taxType)}">${escapeHtml(t.name)}</option>`).join('');
-      taxSel.value = savedTax || '';
-    } catch (e) { /* fall through */ }
-  } else {
-    // Not connected: fall back to free-text inputs so the fields stay usable.
-    if (accSel.tagName === 'SELECT') replaceWithTextInput(accSel, 'setAccountCode', savedAcc);
-    if (taxSel.tagName === 'SELECT') replaceWithTextInput(taxSel, 'setTaxType', savedTax);
-  }
-}
-
-function replaceWithTextInput(selectEl, id, value) {
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.id = id;
-  input.value = value || '';
-  input.placeholder = id === 'setAccountCode' ? 'e.g. 200' : 'e.g. OUTPUT2';
-  selectEl.replaceWith(input);
-}
-
-async function renderXeroPanel() {
-  const pill = document.getElementById('connPill');
-  const statusText = document.getElementById('xeroStatusText');
-  const connectBtn = document.getElementById('xeroConnectBtn');
-  const disconnectBtn = document.getElementById('xeroDisconnectBtn');
-  const pullCustomersBtn = document.getElementById('pullCustomersBtn');
-  const pullItemsBtn = document.getElementById('pullItemsBtn');
-
-  if (!XERO_STATUS.hasCredentials) {
-    pill.textContent = 'Xero: not configured';
-    pill.classList.remove('connected');
-    statusText.textContent = 'No Xero credentials found. Add XERO_CLIENT_ID, XERO_CLIENT_SECRET and REDIRECT_URI to .env and restart the server.';
-    connectBtn.style.display = 'none';
-    disconnectBtn.style.display = 'none';
-    pullCustomersBtn.style.display = 'none';
-    pullItemsBtn.style.display = 'none';
-  } else if (XERO_STATUS.connected) {
-    pill.textContent = 'Xero: ' + (XERO_STATUS.org || 'connected');
-    pill.classList.add('connected');
-    statusText.textContent = 'Connected to ' + (XERO_STATUS.org || 'your Xero organisation') + '.';
-    connectBtn.style.display = 'none';
-    disconnectBtn.style.display = '';
-    pullCustomersBtn.style.display = '';
-    pullItemsBtn.style.display = '';
-  } else {
-    pill.textContent = 'Xero: not connected';
-    pill.classList.remove('connected');
-    statusText.textContent = 'Not connected yet.';
-    connectBtn.style.display = '';
-    disconnectBtn.style.display = 'none';
-    pullCustomersBtn.style.display = 'none';
-    pullItemsBtn.style.display = 'none';
-  }
+  document.getElementById('setAccountCode').value = s.xeroAccountCode || '';
+  document.getElementById('setTaxType').value = s.xeroTaxType || '';
 }
 
 function wireSettingsTab() {
@@ -3119,42 +2572,13 @@ function wireSettingsTab() {
     showBanner('Contractor details saved.', 'ok', 3000);
   });
 
-  document.getElementById('saveXeroFields').addEventListener('click', async () => {
+  document.getElementById('saveExportFields').addEventListener('click', async () => {
     const accEl = document.getElementById('setAccountCode');
     const taxEl = document.getElementById('setTaxType');
     STATE.settings.xeroAccountCode = accEl.value || '';
     STATE.settings.xeroTaxType = taxEl.value || '';
     await persist();
-    showBanner('Xero fields saved.', 'ok', 3000);
-  });
-
-  document.getElementById('xeroDisconnectBtn').addEventListener('click', async () => {
-    if (!confirm('Disconnect Weftly from Xero?')) return;
-    await Api.disconnect();
-    await refreshXeroStatus();
-    renderSettings();
-    showBanner('Disconnected from Xero.', 'info', 4000);
-  });
-
-  document.getElementById('pullCustomersBtn').addEventListener('click', async (e) => {
-    const btn = e.target;
-    btn.disabled = true;
-    const before = STATE.clients.length;
-    const ok = await syncXeroContacts();
-    renderTime(); renderMaterials(); renderClients(); renderOverview();
-    btn.disabled = false;
-    if (ok) showBanner(`Pulled customers from Xero (${STATE.clients.length - before} new).`, 'ok', 4000);
-    else showBanner('Could not pull customers from Xero.', 'err', 5000);
-  });
-
-  document.getElementById('pullItemsBtn').addEventListener('click', async (e) => {
-    const btn = e.target;
-    btn.disabled = true;
-    const ok = await syncXeroItems();
-    renderTime(); renderMaterials();
-    btn.disabled = false;
-    if (ok) showBanner(`Pulled ${XERO_ITEMS_CACHE ? XERO_ITEMS_CACHE.length : 0} items from Xero.`, 'ok', 4000);
-    else showBanner('Could not pull items from Xero.', 'err', 5000);
+    showBanner('Export fields saved.', 'ok', 3000);
   });
 
   document.getElementById('exportCsvBtn').addEventListener('click', () => exportAllCsv());
@@ -3176,7 +2600,6 @@ function wireSettingsTab() {
         clients: Array.isArray(parsed.clients) ? parsed.clients : [],
         time: Array.isArray(parsed.time) ? parsed.time : [],
         materials: Array.isArray(parsed.materials) ? parsed.materials : [],
-        invoices: Array.isArray(parsed.invoices) ? parsed.invoices : [],
         timesheetCounter: Number.isFinite(parsed.timesheetCounter) ? parsed.timesheetCounter : 0,
       };
       await persist();
@@ -3218,28 +2641,8 @@ function renderAll() {
   renderMaterials();
   renderClients();
   renderInvoiceClientOptions();
-  renderInvoicesList();
   renderTimesheetTab();
   renderSettings();
-}
-
-async function refreshXeroStatus() {
-  try {
-    XERO_STATUS = await Api.status();
-  } catch (e) {
-    XERO_STATUS = { hasCredentials: false, connected: false, org: null };
-  }
-  XERO_ITEMS_CACHE = null;
-  renderXeroPanel();
-}
-
-function handleOAuthRedirect() {
-  const params = new URLSearchParams(location.search);
-  if (params.has('connected')) {
-    if (params.get('connected') === '1') showBanner('Connected to Xero.', 'ok', 5000);
-    else showBanner('Xero connection failed: ' + (params.get('error') || 'unknown error'), 'err');
-    history.replaceState({}, '', location.pathname);
-  }
 }
 
 function wireTabNav() {
@@ -3266,14 +2669,6 @@ async function init() {
   wireInvoiceTab();
   wireTimesheetTab();
   wireSettingsTab();
-  await refreshXeroStatus();
-  if (XERO_STATUS.connected) {
-    const [, , invoiceSync] = await Promise.all([syncXeroContacts(), syncXeroItems(), syncXeroInvoices()]);
-    if (invoiceSync && !invoiceSync.ok && invoiceSync.insufficientScope) {
-      showBanner(invoiceSync.message, 'err');
-    }
-  }
-  handleOAuthRedirect();
   renderAll();
   registerServiceWorker();
 }

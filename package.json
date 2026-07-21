@@ -2,7 +2,7 @@
   "name": "weftly",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first time & materials tracker that bills through Xero.",
+  "description": "Local-first time & materials tracker with CSV invoice export.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,7 +12,6 @@
   "license": "UNLICENSED",
   "dependencies": {
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "xero-node": "^9.3.0"
+    "express": "^4.19.2"
   }
 }
