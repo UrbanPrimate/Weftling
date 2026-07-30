@@ -407,9 +407,12 @@
         <label for="authEmail">Email</label>
         <input type="email" id="authEmail" required autocomplete="email" />
       </div>
-      <div class="field">
+      <div class="field" id="authPasswordField">
         <label for="authPassword">Password</label>
         <input type="password" id="authPassword" required autocomplete="current-password" minlength="6" />
+      </div>
+      <div style="text-align:right; margin:-8px 0 14px;">
+        <button type="button" id="authForgotBtn" class="link-btn" style="padding:2px 0;">Forgot password?</button>
       </div>
       <button type="submit" class="btn primary" id="authSubmitBtn" style="width:100%;">Sign in</button>
     </form>
@@ -417,6 +420,28 @@
       <span id="authToggleText">Don't have an account?</span>
       <button type="button" id="authToggleBtn">Sign up</button>
     </div>
+  </div>
+</div>
+
+<!-- RESET-PASSWORD SCREEN — shown only when Supabase reports a password-recovery
+     session, i.e. the user followed the link from the reset email back here. -->
+<div id="resetPasswordScreen" class="auth-screen" style="display:none;">
+  <div class="auth-card">
+    <div class="brand">Weftling</div>
+    <div class="brand-sub">a Fabbric tool</div>
+    <div class="sub">Choose a new password</div>
+    <div id="resetPasswordBanner"></div>
+    <form id="resetPasswordForm">
+      <div class="field">
+        <label for="newPassword">New password</label>
+        <input type="password" id="newPassword" required autocomplete="new-password" minlength="6" />
+      </div>
+      <div class="field">
+        <label for="confirmNewPassword">Confirm new password</label>
+        <input type="password" id="confirmNewPassword" required autocomplete="new-password" minlength="6" />
+      </div>
+      <button type="submit" class="btn primary" id="resetPasswordSubmitBtn" style="width:100%;">Update password</button>
+    </form>
   </div>
 </div>
 
@@ -531,6 +556,10 @@
           <label for="timeDesc">Description</label>
           <input type="text" id="timeDesc" placeholder="What did you do?" required />
         </div>
+        <div class="field" id="timeItemField" style="display:none;">
+          <label for="timeItem">Xero item <span class="muted" style="font-weight:400;">(optional — carries through to invoicing)</span></label>
+          <select id="timeItem"><option value="">— none —</option></select>
+        </div>
         <div class="field" style="max-width:220px;">
           <label for="timeEntryMode">Entry mode</label>
           <select id="timeEntryMode">
@@ -643,6 +672,10 @@
             <label for="matDesc">Description</label>
             <input type="text" id="matDesc" required />
           </div>
+        </div>
+        <div class="field" id="matItemField" style="display:none;">
+          <label for="matItem">Xero item <span class="muted" style="font-weight:400;">(optional — carries through to invoicing)</span></label>
+          <select id="matItem"><option value="">— none —</option></select>
         </div>
         <div class="row">
           <div class="field">
@@ -824,16 +857,27 @@
       <h2>Preview</h2>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th></tr></thead>
+          <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th><th>Xero item</th></tr></thead>
           <tbody id="invRows"></tbody>
           <tfoot>
-            <tr><td colspan="3" style="text-align:right;font-weight:700;">Total</td><td class="num" id="invTotal" style="font-weight:700;"></td></tr>
+            <tr><td colspan="3" style="text-align:right;font-weight:700;">Total</td><td class="num" id="invTotal" style="font-weight:700;"></td><td></td></tr>
           </tfoot>
         </table>
       </div>
       <div class="btn-row" style="margin-top:14px;">
         <button type="button" class="btn primary" id="invDownloadCsv">Download Xero-format CSV</button>
         <button type="button" class="btn secondary" id="invDownloadQbCsv">Download QuickBooks-format CSV</button>
+      </div>
+
+      <div id="invXeroSection" style="display:none; margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+        <div class="field">
+          <label for="invXeroContact">Xero contact</label>
+          <select id="invXeroContact"></select>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="invCreateXeroDraft">Create draft in Xero</button>
+        </div>
+        <div id="invXeroResult" style="margin-top:10px;"></div>
       </div>
     </div>
   </section>
@@ -1000,6 +1044,33 @@
     </div>
 
     <div class="card">
+      <h2>Xero connection</h2>
+      <p class="muted" style="font-size:12.5px; margin-top:-6px;">Connect your own Xero organisation to pull live customers/items/accounts/tax rates and create draft invoices directly in Xero. Entirely optional — the CSV export below works whether or not you connect.</p>
+      <p id="xeroStatusText" class="muted">Checking…</p>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="xeroConnectBtn" style="display:none;">Connect to Xero</button>
+        <button type="button" class="btn danger" id="xeroDisconnectBtn" style="display:none;">Disconnect</button>
+      </div>
+      <div id="xeroTenantPicker" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div class="field">
+          <label for="xeroTenantSelect">Xero authorized more than one organisation — pick which one Weftling should use</label>
+          <select id="xeroTenantSelect"></select>
+        </div>
+        <button type="button" class="btn primary" id="xeroTenantConfirmBtn">Use this organization</button>
+      </div>
+
+      <div id="xeroPullSection" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12px; margin-top:0;">Pull live data from your connected Xero organisation into Weftling.</p>
+        <div class="btn-row">
+          <button type="button" class="btn secondary small" id="xeroPullCustomersBtn">Pull customers</button>
+          <button type="button" class="btn secondary small" id="xeroPullItemsBtn">Pull items</button>
+          <button type="button" class="btn secondary small" id="xeroPullAccountsBtn">Pull accounts &amp; tax types</button>
+        </div>
+        <div id="xeroPullResult" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Accounting software (optional)</h2>
       <p class="muted" style="font-size:12.5px; margin-top:-6px;">If you import invoices into Xero or QuickBooks, these settings pre-fill the right fields so you don't have to map them each time. Leave blank if you don't use these — your CSV still works.</p>
 
@@ -1016,13 +1087,16 @@
         <div class="row">
           <div class="field">
             <label for="setAccountCode">Revenue account code <span class="help-icon" tabindex="0" title="The income account new invoices should post to in Xero (e.g. 200 – Sales). Find it in Xero under Accounting → Chart of accounts. Xero requires this or it rejects the import.">?</span></label>
-            <input type="text" id="setAccountCode" placeholder="e.g. 200" />
+            <input type="text" id="setAccountCode" placeholder="e.g. 200" list="setAccountCodeList" autocomplete="off" />
+            <datalist id="setAccountCodeList"></datalist>
           </div>
           <div class="field">
             <label for="setTaxType">Sales tax rate <span class="help-icon" tabindex="0" title="The tax rate name exactly as it appears in your Xero organisation (e.g. 'Tax on Sales', or 'Tax Exempt' if you don't charge tax). Must match Xero exactly.">?</span></label>
-            <input type="text" id="setTaxType" placeholder="e.g. Tax on Sales" />
+            <input type="text" id="setTaxType" placeholder="e.g. Tax on Sales" list="setTaxTypeList" autocomplete="off" />
+            <datalist id="setTaxTypeList"></datalist>
           </div>
         </div>
+        <p class="muted" style="font-size:12px;" id="xeroFieldsHint"></p>
       </div>
 
       <div id="qbExportFields" style="display:none;">
@@ -1131,6 +1205,368 @@ const SupabaseClient = (() => {
 })();
 
 /* =========================================================================
+   Xero integration — talks only to this app's own /api/xero/* serverless
+   endpoints, never to Xero or Nango directly. This page never holds a Xero
+   or Nango credential of any kind, only the signed-in user's own Supabase
+   access token, attached fresh on every call so the backend can re-verify
+   it independently rather than trust anything this page claims.
+   ========================================================================= */
+let XERO_STATUS = { connected: false, orgName: null };
+let XERO_CONTACTS_CACHE = null;
+let XERO_ITEMS_CACHE = null;
+let XERO_ACCOUNTS_CACHE = null;
+let XERO_TAXRATES_CACHE = null;
+
+/**
+ * Calls one of our own /api/xero/* endpoints with the current Supabase
+ * session attached. Throws on any non-2xx response; the error carries
+ * `.code` (the backend's machine-readable reason) and `.needsReconnect`
+ * (true for insufficient_scope/xero_unauthorized — the "Xero connection
+ * needs reconnecting" case called out in the project's known gotchas) so
+ * callers can show the right prompt instead of a generic failure message.
+ */
+async function xeroApiFetch(path, options) {
+  options = options || {};
+  if (!SupabaseClient) throw new Error('Supabase isn’t configured.');
+  const { data: { session } } = await SupabaseClient.auth.getSession();
+  if (!session) throw new Error('Not signed in — reload and sign in again.');
+
+  const res = await fetch(path, {
+    method: options.method || 'GET',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  let body = null;
+  let parseError = null;
+  try { body = await res.json(); } catch (e) { parseError = e; }
+
+  if (!res.ok) {
+    const code = body && body.error;
+    const err = new Error((body && body.message) || `Request to ${path} failed (${res.status}).`);
+    err.code = code;
+    err.status = res.status;
+    err.needsReconnect = code === 'insufficient_scope' || code === 'xero_unauthorized';
+    err.notConnected = code === 'not_connected';
+    throw err;
+  }
+  // A 200 with a body that isn't valid JSON is never a real success — most
+  // likely `path` isn't actually reachable as an API endpoint (e.g. running
+  // `npm start`'s plain static server locally, where /api/* isn't wired up
+  // and every unmatched route falls back to index.html's HTML). Surface it
+  // as a failure rather than silently handing callers `null` to crash on.
+  if (parseError) {
+    throw new Error(`${path} did not return valid JSON — is this endpoint actually deployed/running?`);
+  }
+  return body;
+}
+
+/** Refreshes XERO_STATUS from the backend and re-renders anywhere it's shown. Safe to call anytime, including while signed out (falls back to disconnected). */
+async function refreshXeroStatus() {
+  try {
+    XERO_STATUS = await xeroApiFetch('/api/xero/status');
+  } catch (e) {
+    console.error('refreshXeroStatus failed:', e);
+    XERO_STATUS = { connected: false };
+  }
+  XERO_CONTACTS_CACHE = null;
+  XERO_ITEMS_CACHE = null;
+  XERO_ACCOUNTS_CACHE = null;
+  XERO_TAXRATES_CACHE = null;
+  renderXeroConnectionPanel();
+  await renderXeroAccountingLists();
+  renderXeroItemPickers();
+  if (currentPreview) renderInvoicePreview();
+}
+
+/** Fills a Xero item <select> from XERO_ITEMS_CACHE, preserving whatever was already selected. */
+function populateXeroItemSelect(select) {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">— none —</option>' + (XERO_ITEMS_CACHE || [])
+    .map((it) => `<option value="${escapeHtml(it.itemCode)}">${escapeHtml(it.itemCode)} — ${escapeHtml(it.name)}</option>`)
+    .join('');
+  if (current) select.value = current;
+}
+
+/**
+ * Shows/hides and (re)populates the "Xero item" pickers in the Time and
+ * Materials entry forms. Called whenever connection status changes and
+ * whenever XERO_ITEMS_CACHE gets filled in — items are fetched lazily
+ * (opening the Invoice tab, or the "Pull items" button in Settings), not
+ * eagerly on every page load, so this can run before the cache is warm;
+ * that just means the picker shows only "— none —" until items land.
+ */
+function renderXeroItemPickers() {
+  const timeField = document.getElementById('timeItemField');
+  const matField = document.getElementById('matItemField');
+  if (!timeField || !matField) return; // Time/Materials tabs not rendered yet
+
+  const show = XERO_STATUS.connected;
+  timeField.style.display = show ? '' : 'none';
+  matField.style.display = show ? '' : 'none';
+  if (show) {
+    populateXeroItemSelect(document.getElementById('timeItem'));
+    populateXeroItemSelect(document.getElementById('matItem'));
+  }
+}
+
+/**
+ * Populates the Revenue account code / Sales tax rate fields in Settings
+ * with live suggestions from the user's own Xero chart of accounts, via an
+ * HTML <datalist> — the inputs stay plain text fields (so typing still
+ * works, and nothing breaks for anyone not connected), but connected users
+ * get an accurate autocomplete instead of guessing a code by hand. This is
+ * exactly the "must match Xero exactly" gotcha the help text next to these
+ * fields already warns about.
+ */
+async function renderXeroAccountingLists() {
+  const accList = document.getElementById('setAccountCodeList');
+  const taxList = document.getElementById('setTaxTypeList');
+  const hint = document.getElementById('xeroFieldsHint');
+  if (!accList || !taxList) return; // Settings tab not rendered yet
+
+  if (!XERO_STATUS.connected) {
+    accList.innerHTML = '';
+    taxList.innerHTML = '';
+    if (hint) hint.textContent = 'Connect Xero above for live suggestions as you type — otherwise, enter these exactly as they appear in Xero.';
+    return;
+  }
+  if (hint) hint.textContent = 'Suggestions below are pulled live from your connected Xero organisation.';
+
+  try {
+    if (!XERO_ACCOUNTS_CACHE) {
+      const result = await xeroApiFetch('/api/xero/accounts');
+      XERO_ACCOUNTS_CACHE = result.accounts;
+    }
+    accList.innerHTML = XERO_ACCOUNTS_CACHE
+      .map((a) => `<option value="${escapeHtml(a.code)}">${escapeHtml(a.name)}</option>`).join('');
+  } catch (e) {
+    console.error('Loading Xero accounts failed:', e);
+  }
+
+  try {
+    if (!XERO_TAXRATES_CACHE) {
+      const result = await xeroApiFetch('/api/xero/taxrates');
+      XERO_TAXRATES_CACHE = result.taxRates;
+    }
+    taxList.innerHTML = XERO_TAXRATES_CACHE
+      .map((t) => `<option value="${escapeHtml(t.taxType)}">${escapeHtml(t.name)}</option>`).join('');
+  } catch (e) {
+    console.error('Loading Xero tax rates failed:', e);
+  }
+}
+
+/**
+ * Opens Nango's hosted Connect UI so the user authorizes Weftling against
+ * their own Xero org — the actual Xero login/consent screen only ever runs
+ * inside that popup, never in this page. @nangohq/frontend is loaded lazily
+ * (only once this runs), via jsdelivr's ES-module endpoint, so users who
+ * never touch Xero never fetch it at all.
+ */
+// Set only between a successful Connect UI popup and the user picking which
+// Xero organisation to use, when Xero's own consent screen authorized more
+// than one — see finalize.js's `needsTenantSelection` response.
+let pendingXeroConnectionId = null;
+
+async function connectXero() {
+  const btn = document.getElementById('xeroConnectBtn');
+  if (btn) btn.disabled = true;
+  hideXeroTenantPicker();
+  try {
+    const { token } = await xeroApiFetch('/api/xero/connect-session', { method: 'POST' });
+    // @nangohq/frontend's built bundle exports the Nango class as the
+    // default export only (confirmed by fetching the actual jsdelivr +esm
+    // output: `export{a as AuthError,w as ConnectUI,U as default}` — no
+    // named `Nango` export exists). `import(...).Nango` is always
+    // undefined; `.default` is the real class.
+    const { default: Nango } = await import('https://cdn.jsdelivr.net/npm/@nangohq/frontend/+esm');
+    const nango = new Nango({ connectSessionToken: token });
+    nango.openConnectUI({
+      onEvent: async (event) => {
+        if (event.type !== 'connect') return;
+        await finalizeXeroConnection(event.payload.connectionId, null);
+      },
+    });
+  } catch (e) {
+    showBanner('Could not start the Xero connection: ' + e.message, 'err', 6000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/**
+ * Calls /api/xero/finalize. With no tenantId, this is the first call right
+ * after Connect UI succeeds — if Xero's consent screen authorized more than
+ * one organisation, the backend won't guess which to use; it returns
+ * `needsTenantSelection` instead of connecting, and this shows the picker
+ * so the user can send a follow-up call with an explicit tenantId.
+ */
+async function finalizeXeroConnection(connectionId, tenantId) {
+  try {
+    const result = await xeroApiFetch('/api/xero/finalize', {
+      method: 'POST',
+      body: tenantId ? { connectionId, tenantId } : { connectionId },
+    });
+    if (result.needsTenantSelection) {
+      showXeroTenantPicker(connectionId, result.tenants);
+      return; // nothing is connected yet — don't refresh status until a tenant is chosen
+    }
+    hideXeroTenantPicker();
+    showBanner('Connected to Xero.', 'ok', 4000);
+  } catch (e) {
+    showBanner('Xero authorized, but finalizing the connection failed: ' + e.message, 'err', 8000);
+  }
+  await refreshXeroStatus();
+}
+
+function showXeroTenantPicker(connectionId, tenants) {
+  pendingXeroConnectionId = connectionId;
+  const picker = document.getElementById('xeroTenantPicker');
+  const sel = document.getElementById('xeroTenantSelect');
+  sel.innerHTML = tenants
+    .map((t) => `<option value="${escapeHtml(t.tenantId)}">${escapeHtml(t.orgName || t.tenantId)}</option>`)
+    .join('');
+  picker.style.display = '';
+  showBanner('Xero authorized more than one organisation — pick which one Weftling should use.', 'info', 8000);
+}
+
+function hideXeroTenantPicker() {
+  pendingXeroConnectionId = null;
+  const picker = document.getElementById('xeroTenantPicker');
+  if (picker) picker.style.display = 'none';
+}
+
+async function confirmXeroTenantSelection() {
+  const tenantId = document.getElementById('xeroTenantSelect').value;
+  if (!pendingXeroConnectionId || !tenantId) return;
+  const btn = document.getElementById('xeroTenantConfirmBtn');
+  btn.disabled = true;
+  try {
+    await finalizeXeroConnection(pendingXeroConnectionId, tenantId);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function disconnectXero() {
+  if (!confirm('Disconnect Weftling from Xero?')) return;
+  try {
+    await xeroApiFetch('/api/xero/disconnect', { method: 'POST' });
+    showBanner('Disconnected from Xero.', 'info', 4000);
+  } catch (e) {
+    showBanner('Disconnect failed: ' + e.message, 'err', 6000);
+  }
+  hideXeroTenantPicker();
+  await refreshXeroStatus();
+}
+
+function renderXeroConnectionPanel() {
+  const statusText = document.getElementById('xeroStatusText');
+  const connectBtn = document.getElementById('xeroConnectBtn');
+  const disconnectBtn = document.getElementById('xeroDisconnectBtn');
+  const pullSection = document.getElementById('xeroPullSection');
+  if (!statusText || !connectBtn || !disconnectBtn) return; // Settings tab not rendered yet
+
+  if (XERO_STATUS.connected) {
+    statusText.textContent = 'Connected to ' + (XERO_STATUS.orgName || 'your Xero organisation') + '.';
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = '';
+    if (pullSection) pullSection.style.display = '';
+  } else {
+    statusText.textContent = 'Not connected.';
+    connectBtn.style.display = '';
+    disconnectBtn.style.display = 'none';
+    if (pullSection) {
+      pullSection.style.display = 'none';
+      document.getElementById('xeroPullResult').innerHTML = '';
+    }
+  }
+}
+
+/** POST /api/xero/pull-customers — syncs Xero contacts into this user's own `clients`, then reloads STATE so the new/updated clients show up immediately. */
+async function pullXeroCustomers() {
+  const btn = document.getElementById('xeroPullCustomersBtn');
+  const resultEl = document.getElementById('xeroPullResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Pulling customers…';
+  try {
+    const result = await xeroApiFetch('/api/xero/pull-customers', { method: 'POST' });
+    resultEl.textContent = `Pulled ${result.pulled} customers — ${result.created} new, ${result.updated} updated.`;
+    await loadState();
+    renderClients();
+    renderInvoiceClientOptions();
+    renderOverview();
+    showBanner('Customers pulled from Xero.', 'ok', 4000);
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderXeroReconnectPrompt(resultEl, e);
+    } else {
+      resultEl.textContent = '';
+      showBanner('Could not pull customers: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** GET /api/xero/items — refreshes XERO_ITEMS_CACHE and every picker built from it (Invoice tab per-line override, Time/Materials entry-form pickers). */
+async function pullXeroItems() {
+  const btn = document.getElementById('xeroPullItemsBtn');
+  const resultEl = document.getElementById('xeroPullResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Pulling items…';
+  try {
+    const result = await xeroApiFetch('/api/xero/items');
+    XERO_ITEMS_CACHE = result.items;
+    resultEl.textContent = `Pulled ${result.items.length} items.`;
+    renderXeroItemPickers();
+    if (currentPreview) renderInvoicePreview();
+    showBanner('Items pulled from Xero.', 'ok', 4000);
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderXeroReconnectPrompt(resultEl, e);
+    } else {
+      resultEl.textContent = '';
+      showBanner('Could not pull items: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** GET /api/xero/accounts + /api/xero/taxrates in parallel — refreshes the live suggestions on the Revenue account code / Sales tax rate fields above. */
+async function pullXeroAccountsAndTaxTypes() {
+  const btn = document.getElementById('xeroPullAccountsBtn');
+  const resultEl = document.getElementById('xeroPullResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Pulling accounts & tax types…';
+  try {
+    const [accountsResult, taxRatesResult] = await Promise.all([
+      xeroApiFetch('/api/xero/accounts'),
+      xeroApiFetch('/api/xero/taxrates'),
+    ]);
+    XERO_ACCOUNTS_CACHE = accountsResult.accounts;
+    XERO_TAXRATES_CACHE = taxRatesResult.taxRates;
+    resultEl.textContent = `Pulled ${accountsResult.accounts.length} accounts and ${taxRatesResult.taxRates.length} tax rates.`;
+    await renderXeroAccountingLists();
+    showBanner('Accounts and tax types pulled from Xero.', 'ok', 4000);
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderXeroReconnectPrompt(resultEl, e);
+    } else {
+      resultEl.textContent = '';
+      showBanner('Could not pull accounts/tax types: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* =========================================================================
    Billing math — mirrors lib/billing.js exactly (sanity checks documented
    there). Kept duplicated because the frontend is a zero-build static file.
    ========================================================================= */
@@ -1226,10 +1662,17 @@ function requireUser() {
 // ---- field mapping: JS camelCase (STATE, as before) <-> Postgres snake_case (the tables from Step 3) ----
 
 function clientToRow(c) {
-  return { id: c.id, name: c.name, email: c.email, rate: c.rate, increment: c.increment };
+  return { id: c.id, name: c.name, email: c.email, rate: c.rate, increment: c.increment, xero_contact_id: c.xeroContactId };
 }
 function clientFromRow(r) {
-  return { id: r.id, name: r.name, email: r.email, rate: r.rate == null ? null : Number(r.rate), increment: r.increment };
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    rate: r.rate == null ? null : Number(r.rate),
+    increment: r.increment,
+    xeroContactId: r.xero_contact_id || null,
+  };
 }
 
 function timeToRow(t) {
@@ -1247,6 +1690,7 @@ function timeToRow(t) {
     clock_end: t.clockEnd,
     clock_break_minutes: t.clockBreakMinutes,
     invoiced: t.invoiced,
+    xero_item_code: t.xeroItemCode,
   };
 }
 function timeFromRow(r) {
@@ -1264,6 +1708,7 @@ function timeFromRow(r) {
     clockEnd: r.clock_end,
     clockBreakMinutes: r.clock_break_minutes,
     invoiced: r.invoiced,
+    xeroItemCode: r.xero_item_code || null,
   };
 }
 
@@ -1278,6 +1723,7 @@ function materialToRow(m) {
     markup_pct: m.markupPct,
     billable: m.billable,
     invoiced: m.invoiced,
+    xero_item_code: m.xeroItemCode,
   };
 }
 function materialFromRow(r) {
@@ -1291,6 +1737,7 @@ function materialFromRow(r) {
     markupPct: Number(r.markup_pct),
     billable: r.billable,
     invoiced: r.invoiced,
+    xeroItemCode: r.xero_item_code || null,
   };
 }
 
@@ -2023,6 +2470,7 @@ function loadTimeEntryIntoForm(id) {
   document.getElementById('timeRate').value = t.rate;
   document.getElementById('timeIncrement').value = t.increment;
   document.getElementById('timeBillable').checked = t.billable;
+  document.getElementById('timeItem').value = t.xeroItemCode || '';
   document.getElementById('timeFormTitle').textContent = 'Edit time entry';
   document.getElementById('timeSubmitBtn').textContent = 'Update entry';
   document.getElementById('timeCancelEdit').style.display = '';
@@ -2075,6 +2523,7 @@ function wireTimeTab() {
       clockEnd: mode === 'clock' ? canonicalClockValue(document.getElementById('timeEnd').value) : null,
       clockBreakMinutes: mode === 'clock' ? (Number(document.getElementById('timeBreak').value) || 0) : null,
       invoiced: false,
+      xeroItemCode: document.getElementById('timeItem').value || null,
     };
 
     const isEdit = Boolean(timeEditingId);
@@ -2258,6 +2707,7 @@ function loadMatEntryIntoForm(id) {
   document.getElementById('matUnitCost').value = m.unitCost;
   document.getElementById('matMarkup').value = m.markupPct;
   document.getElementById('matBillable').checked = m.billable;
+  document.getElementById('matItem').value = m.xeroItemCode || '';
   document.getElementById('matFormTitle').textContent = 'Edit material';
   document.getElementById('matCancelEdit').style.display = '';
   showTab('materials');
@@ -2279,6 +2729,7 @@ function wireMaterialsTab() {
       markupPct: markupRaw !== '' ? Number(markupRaw) : Number(STATE.settings.defaultMarkup) || 0,
       billable: document.getElementById('matBillable').checked,
       invoiced: false,
+      xeroItemCode: document.getElementById('matItem').value || null,
     };
     const isEdit = Boolean(matEditingId);
     if (isEdit) entry.invoiced = STATE.materials.find((x) => x.id === matEditingId).invoiced;
@@ -2694,6 +3145,7 @@ function buildLineItems(time, materials) {
       unitAmount: Billing.round2(t.rate),
       accountCode: STATE.settings.xeroAccountCode || '',
       taxType: STATE.settings.xeroTaxType || '',
+      itemCode: t.xeroItemCode || null, // picked while logging the entry — pre-selects the picker below instead of starting blank
     });
   }
   for (const m of materials) {
@@ -2704,6 +3156,7 @@ function buildLineItems(time, materials) {
       unitAmount: Billing.round2(m.unitCost * (1 + (m.markupPct || 0) / 100)),
       accountCode: STATE.settings.xeroAccountCode || '',
       taxType: STATE.settings.xeroTaxType || '',
+      itemCode: m.xeroItemCode || null,
     });
   }
   return lines;
@@ -2712,17 +3165,34 @@ function buildLineItems(time, materials) {
 function renderInvoicePreview() {
   const tbody = document.getElementById('invRows');
   const lines = currentPreview.lineItems;
+  const itemOptions = XERO_ITEMS_CACHE
+    ? '<option value="">—</option>' + XERO_ITEMS_CACHE.map((it) =>
+        `<option value="${escapeHtml(it.itemCode)}">${escapeHtml(it.itemCode)} — ${escapeHtml(it.name)}</option>`
+      ).join('')
+    : '';
+
   if (!lines.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Nothing unbilled for this client in range.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nothing unbilled for this client in range.</td></tr>';
   } else {
-    tbody.innerHTML = lines.map((l) => `
+    tbody.innerHTML = lines.map((l, idx) => `
       <tr>
         <td>${escapeHtml(l.description)}</td>
         <td class="num">${l.quantity}</td>
         <td class="num">${formatMoney(l.unitAmount)}</td>
         <td class="num">${formatMoney(l.quantity * l.unitAmount)}</td>
+        <td>${
+          XERO_STATUS.connected
+            ? `<select class="xero-item-select" data-idx="${idx}">${itemOptions}</select>`
+            : '<span class="muted">—</span>'
+        }</td>
       </tr>
     `).join('');
+    if (XERO_STATUS.connected) {
+      lines.forEach((l, idx) => {
+        const sel = tbody.querySelector(`select.xero-item-select[data-idx="${idx}"]`);
+        if (sel && l.itemCode) sel.value = l.itemCode;
+      });
+    }
   }
   const total = lines.reduce((s, l) => s + l.quantity * l.unitAmount, 0);
   document.getElementById('invTotal').textContent = formatMoney(total);
@@ -2730,6 +3200,163 @@ function renderInvoicePreview() {
 
   document.getElementById('invDownloadCsv').disabled = !lines.length;
   document.getElementById('invDownloadQbCsv').disabled = !lines.length;
+
+  renderInvoiceXeroSection();
+}
+
+/**
+ * Shows/hides the "Create draft in Xero" panel and keeps its Xero contact
+ * picker + per-line item pickers stocked with live data. Contacts/items are
+ * fetched once per connection and cached (XERO_CONTACTS_CACHE/
+ * XERO_ITEMS_CACHE, cleared on reconnect/disconnect by refreshXeroStatus).
+ */
+async function renderInvoiceXeroSection() {
+  const section = document.getElementById('invXeroSection');
+  if (!section || !currentPreview) return;
+
+  if (!XERO_STATUS.connected) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  document.getElementById('invCreateXeroDraft').disabled = !currentPreview.lineItems.length;
+
+  const needContacts = !XERO_CONTACTS_CACHE;
+  const needItems = !XERO_ITEMS_CACHE;
+  if (needContacts || needItems) {
+    try {
+      const [contactsResult, itemsResult] = await Promise.all([
+        needContacts ? xeroApiFetch('/api/xero/contacts') : Promise.resolve(null),
+        needItems ? xeroApiFetch('/api/xero/items') : Promise.resolve(null),
+      ]);
+      if (contactsResult) XERO_CONTACTS_CACHE = contactsResult.contacts;
+      if (itemsResult) {
+        XERO_ITEMS_CACHE = itemsResult.items;
+        renderInvoicePreview(); // redraws the per-line item pickers now that real options exist
+        renderXeroItemPickers(); // also fills the Time/Materials entry-form item pickers
+      }
+    } catch (e) {
+      console.error('Loading Xero contacts/items failed:', e);
+    }
+  }
+
+  const contacts = XERO_CONTACTS_CACHE || [];
+  const sel = document.getElementById('invXeroContact');
+  sel.innerHTML = '<option value="">— pick a contact —</option>' +
+    contacts.map((c) => `<option value="${escapeHtml(c.contactId)}">${escapeHtml(c.name)}</option>`).join('');
+  const client = clientById(currentPreview.clientId);
+  if (client) {
+    const match = contacts.find((c) => c.name.trim().toLowerCase() === client.name.trim().toLowerCase());
+    if (match) sel.value = match.contactId;
+  }
+}
+
+let lastCreatedXeroInvoice = null;
+
+/**
+ * Renders a "Xero connection needs reconnecting" banner + working Reconnect
+ * button into `container`. Shared by every Xero pull/write action whose
+ * error has `.needsReconnect` set (see xeroApiFetch's doc comment) — the
+ * banner markup and click-wiring only exist here, once, instead of being
+ * copy-pasted at every call site.
+ */
+function renderXeroReconnectPrompt(container, err) {
+  container.innerHTML = '';
+  const banner = document.createElement('div');
+  banner.className = 'banner err';
+  banner.append('Xero connection needs reconnecting: ' + err.message + ' ');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'link-btn';
+  btn.textContent = 'Reconnect';
+  btn.addEventListener('click', () => connectXero());
+  banner.appendChild(btn);
+  container.appendChild(banner);
+}
+
+async function createXeroDraftInvoice() {
+  if (!currentPreview || !currentPreview.lineItems.length) return;
+  const contactId = document.getElementById('invXeroContact').value;
+  const client = clientById(currentPreview.clientId);
+  if (!contactId && !client) {
+    showBanner('Pick a Xero contact first.', 'err', 4000);
+    return;
+  }
+
+  const invDate = document.getElementById('invDate').value || todayISO();
+  const dueDate = document.getElementById('invDue').value || addDaysISO(invDate, Number(STATE.settings.termsDays) || 0);
+  const reference = document.getElementById('invReference').value.trim();
+
+  const btn = document.getElementById('invCreateXeroDraft');
+  btn.disabled = true;
+  const resultEl = document.getElementById('invXeroResult');
+  resultEl.innerHTML = '';
+
+  try {
+    const result = await xeroApiFetch('/api/xero/invoices', {
+      method: 'POST',
+      body: {
+        contactId: contactId || undefined,
+        contactName: contactId ? undefined : client.name,
+        date: invDate,
+        dueDate,
+        reference: reference || undefined,
+        lineItems: currentPreview.lineItems.map((l) => ({
+          description: l.description,
+          quantity: l.quantity,
+          unitAmount: l.unitAmount,
+          itemCode: l.itemCode || undefined,
+          accountCode: l.itemCode ? undefined : l.accountCode,
+          taxType: l.itemCode ? undefined : l.taxType,
+        })),
+      },
+    });
+
+    lastCreatedXeroInvoice = result;
+    renderXeroInvoiceResult(result);
+    showBanner(`Draft invoice ${result.invoiceNumber || ''} created in Xero.`, 'ok', 6000);
+
+    if (confirm('Mark these entries as invoiced now that the draft is in Xero?')) {
+      await markPreviewInvoiced();
+      renderInvoicePreview();
+      renderTime(); renderMaterials(); renderOverview(); renderClients();
+    }
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderXeroReconnectPrompt(resultEl, e);
+    } else {
+      showBanner('Xero rejected the invoice: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderXeroInvoiceResult(inv) {
+  const resultEl = document.getElementById('invXeroResult');
+  resultEl.innerHTML = `
+    <div class="banner ok">
+      Invoice ${escapeHtml(inv.invoiceNumber || '')} — status: <strong>${escapeHtml(inv.status || '')}</strong>.
+      <a href="${escapeHtml(inv.deepLink)}" target="_blank" rel="noopener">Open in Xero →</a>
+      <button type="button" class="link-btn" id="invXeroSyncBtn">Sync status</button>
+    </div>
+  `;
+  document.getElementById('invXeroSyncBtn').addEventListener('click', () => syncXeroInvoiceStatus());
+}
+
+async function syncXeroInvoiceStatus() {
+  if (!lastCreatedXeroInvoice) return;
+  try {
+    const result = await xeroApiFetch('/api/xero/invoice-status?ids=' + encodeURIComponent(lastCreatedXeroInvoice.invoiceId));
+    const fresh = result.invoices && result.invoices[0];
+    if (fresh) {
+      lastCreatedXeroInvoice = { ...lastCreatedXeroInvoice, ...fresh };
+      renderXeroInvoiceResult(lastCreatedXeroInvoice);
+      showBanner('Invoice status refreshed from Xero.', 'info', 3000);
+    }
+  } catch (e) {
+    showBanner('Could not refresh invoice status: ' + e.message, 'err', 6000);
+  }
 }
 
 async function markPreviewInvoiced() {
@@ -2848,6 +3475,19 @@ function wireInvoiceTab() {
     downloadQbCsvForPreview();
     await afterCsvDownload();
   });
+
+  // Event delegation on the tbody rather than a listener per row: rows are
+  // rebuilt wholesale on every renderInvoicePreview() call, so a per-row
+  // binding would leak listeners on every rebuild.
+  document.getElementById('invRows').addEventListener('change', (e) => {
+    if (!e.target.matches('select.xero-item-select')) return;
+    const idx = Number(e.target.dataset.idx);
+    if (currentPreview && currentPreview.lineItems[idx]) {
+      currentPreview.lineItems[idx].itemCode = e.target.value || null;
+    }
+  });
+
+  document.getElementById('invCreateXeroDraft').addEventListener('click', () => createXeroDraftInvoice());
 }
 
 /* =========================================================================
@@ -3324,6 +3964,14 @@ function applyAccountingSoftwareVisibility(software) {
 }
 
 function wireSettingsTab() {
+  document.getElementById('xeroConnectBtn').addEventListener('click', () => connectXero());
+  document.getElementById('xeroDisconnectBtn').addEventListener('click', () => disconnectXero());
+  document.getElementById('xeroTenantConfirmBtn').addEventListener('click', () => confirmXeroTenantSelection());
+  document.getElementById('xeroPullCustomersBtn').addEventListener('click', () => pullXeroCustomers());
+  document.getElementById('xeroPullItemsBtn').addEventListener('click', () => pullXeroItems());
+  document.getElementById('xeroPullAccountsBtn').addEventListener('click', () => pullXeroAccountsAndTaxTypes());
+  renderXeroConnectionPanel(); // paint immediately from whatever refreshXeroStatus() already fetched at app start
+
   document.getElementById('settingsForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const next = {
@@ -3511,17 +4159,19 @@ function registerServiceWorker() {
    signed-in session.
    ========================================================================= */
 let appStarted = false; // guards against initApp() running twice
-let authMode = 'signin'; // 'signin' | 'signup'
+let authMode = 'signin'; // 'signin' | 'signup' | 'forgot'
 
 function showAuthScreen() {
   CURRENT_USER = null;
   document.getElementById('authScreen').style.display = '';
+  document.getElementById('resetPasswordScreen').style.display = 'none';
   document.getElementById('appShell').style.display = 'none';
 }
 
 function showApp(user) {
   CURRENT_USER = user; // set BEFORE initApp() so its first Supabase queries always have a user to scope to
   document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('resetPasswordScreen').style.display = 'none';
   document.getElementById('appShell').style.display = '';
   document.getElementById('authUserEmail').textContent = user.email || '';
   if (!appStarted) {
@@ -3530,25 +4180,55 @@ function showApp(user) {
   }
 }
 
+function showResetPasswordScreen() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'none';
+  document.getElementById('resetPasswordScreen').style.display = '';
+}
+
 function authBanner(message, kind) {
   const el = document.getElementById('authBanner');
   el.innerHTML = message ? `<div class="banner ${kind}">${escapeHtml(message)}</div>` : '';
 }
 
+function resetPasswordBanner(message, kind) {
+  const el = document.getElementById('resetPasswordBanner');
+  el.innerHTML = message ? `<div class="banner ${kind}">${escapeHtml(message)}</div>` : '';
+}
+
 function setAuthMode(mode) {
   authMode = mode;
-  const isSignup = mode === 'signup';
-  document.getElementById('authSubtitle').textContent = isSignup ? 'Create your account' : 'Sign in to your account';
-  document.getElementById('authSubmitBtn').textContent = isSignup ? 'Sign up' : 'Sign in';
-  document.getElementById('authToggleText').textContent = isSignup ? 'Already have an account?' : 'Don’t have an account?';
-  document.getElementById('authToggleBtn').textContent = isSignup ? 'Sign in' : 'Sign up';
+  const passwordField = document.getElementById('authPasswordField');
+  const forgotBtn = document.getElementById('authForgotBtn');
+
+  if (mode === 'forgot') {
+    document.getElementById('authSubtitle').textContent = 'Reset your password';
+    document.getElementById('authSubmitBtn').textContent = 'Send reset link';
+    document.getElementById('authToggleText').textContent = 'Remembered it?';
+    document.getElementById('authToggleBtn').textContent = 'Back to sign in';
+    passwordField.style.display = 'none';
+    document.getElementById('authPassword').required = false;
+    forgotBtn.style.display = 'none';
+  } else {
+    const isSignup = mode === 'signup';
+    document.getElementById('authSubtitle').textContent = isSignup ? 'Create your account' : 'Sign in to your account';
+    document.getElementById('authSubmitBtn').textContent = isSignup ? 'Sign up' : 'Sign in';
+    document.getElementById('authToggleText').textContent = isSignup ? 'Already have an account?' : 'Don’t have an account?';
+    document.getElementById('authToggleBtn').textContent = isSignup ? 'Sign in' : 'Sign up';
+    passwordField.style.display = '';
+    document.getElementById('authPassword').required = true;
+    forgotBtn.style.display = isSignup ? 'none' : '';
+  }
   authBanner('');
 }
 
 function wireAuthScreen() {
   document.getElementById('authToggleBtn').addEventListener('click', () => {
+    if (authMode === 'forgot') { setAuthMode('signin'); return; }
     setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
   });
+
+  document.getElementById('authForgotBtn').addEventListener('click', () => setAuthMode('forgot'));
 
   document.getElementById('authForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3562,7 +4242,17 @@ function wireAuthScreen() {
     btn.disabled = true;
     authBanner('');
     try {
-      if (authMode === 'signup') {
+      if (authMode === 'forgot') {
+        // Same-wording-either-way as the signup enumeration guard below: whether
+        // this email has an account or not, the response looks identical, so
+        // watching this form can't be used to test which emails are registered.
+        const { error } = await SupabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin,
+        });
+        if (error) throw error;
+        authBanner('If that email has an account, check your inbox for a reset link.', 'info');
+        setAuthMode('signin');
+      } else if (authMode === 'signup') {
         const { data, error } = await SupabaseClient.auth.signUp({ email, password });
         if (error) {
           // Supabase's default signup error reveals whether an email is
@@ -3614,10 +4304,38 @@ function wireLogout() {
   });
 }
 
+function wireResetPasswordScreen() {
+  document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pw1 = document.getElementById('newPassword').value;
+    const pw2 = document.getElementById('confirmNewPassword').value;
+    resetPasswordBanner('');
+    if (pw1 !== pw2) {
+      resetPasswordBanner('Passwords don’t match.', 'err');
+      return;
+    }
+    const btn = document.getElementById('resetPasswordSubmitBtn');
+    btn.disabled = true;
+    try {
+      const { data, error } = await SupabaseClient.auth.updateUser({ password: pw1 });
+      if (error) throw error;
+      // updateUser() clears the one-time recovery session and hands back a
+      // regular one for the same user, so this goes straight into the app
+      // rather than back to the sign-in form.
+      showApp(data.user);
+    } catch (err) {
+      resetPasswordBanner(err.message || 'Something went wrong.', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 async function initAuth() {
   clearLegacyLocalStorage();
   wireAuthScreen();
   wireLogout();
+  wireResetPasswordScreen();
 
   if (!SupabaseClient) {
     authBanner('Supabase isn’t configured — edit public/config.js with your project URL and anon key, then reload.', 'err');
@@ -3636,6 +4354,14 @@ async function initAuth() {
   // refresh — comes through here instead. showApp()'s appStarted guard means
   // initApp() still only ever runs once, no matter how many times this fires.
   SupabaseClient.auth.onAuthStateChange((event, session) => {
+    // Fires when the user lands back here via the emailed reset link — the
+    // session at this point is a short-lived recovery one, good only for
+    // calling updateUser(). Route to the "choose a new password" screen
+    // instead of straight into the app.
+    if (event === 'PASSWORD_RECOVERY') {
+      showResetPasswordScreen();
+      return;
+    }
     if (session) showApp(session.user);
     else showAuthScreen();
   });
@@ -3659,6 +4385,7 @@ async function initApp() {
   wireSettingsTab();
   renderAll();
   registerServiceWorker();
+  refreshXeroStatus(); // not awaited — a slow/failed status check shouldn't hold up the rest of the app
 }
 
 document.addEventListener('DOMContentLoaded', initAuth);

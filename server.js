@@ -19,12 +19,21 @@ const PORT = process.env.PORT || 3000;
 // app (clickjacking on the login screen), and any exfiltration attempt via
 // fetch()/WebSocket is confined to this origin and Supabase's — an injected
 // script can't phone home to an attacker's server even if it does run.
+// connect-src/frame-src additions are for @nangohq/frontend (loaded only
+// when a user clicks "Connect Xero"): it talks to api.nango.dev from this
+// page's own context, and its Connect UI runs at connect.nango.dev — either
+// as a same-page frame or a separate popup window depending on Nango's
+// implementation, so both are allow-listed defensively. Xero's own OAuth
+// pages are never loaded in this app at all — they only ever appear inside
+// Nango's popup, a separate top-level browsing context this CSP has no
+// jurisdiction over.
 const CSP = [
   "default-src 'self'",
   "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co",
+  "connect-src 'self' https://*.supabase.co https://api.nango.dev https://connect.nango.dev",
+  "frame-src https://connect.nango.dev",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -36,6 +45,15 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY'); // legacy backstop for frame-ancestors above, for older browsers
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // HSTS is a no-op over plain http (this local dev server) — browsers only
+  // honor it when received over an actual https connection, which is all
+  // this app is ever served over in production (Vercel). Harmless here,
+  // load-bearing there.
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+  // The app never uses any of these browser features (confirmed: no
+  // geolocation/camera/mic/payment API calls anywhere in the codebase) —
+  // denying them outright is pure hardening, not a behavior change.
+  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=()');
   next();
 });
 
