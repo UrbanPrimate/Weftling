@@ -1124,6 +1124,56 @@
     </div>
 
     <div class="card">
+      <h2>Import your own data</h2>
+      <p class="muted" style="font-size:12.5px;">Re-import a CSV or XLSX file previously exported from "Export to CSV" above — same columns and date format, matched against what you already have so nothing gets duplicated. This is <strong>not</strong> for Xero/QuickBooks customer exports — use "Import customers" on the Clients tab for those.</p>
+      <div class="row">
+        <div class="field">
+          <label for="weftlyImportType">What kind of file is this?</label>
+          <select id="weftlyImportType">
+            <option value="time">Time</option>
+            <option value="materials">Materials</option>
+            <option value="clients">Clients</option>
+          </select>
+        </div>
+        <div class="field" style="flex:2 1 200px;">
+          <label for="weftlyImportFile">File</label>
+          <input type="file" id="weftlyImportFile" accept=".csv,.xlsx" />
+        </div>
+      </div>
+      <p class="muted" id="weftlyImportStatus" style="font-size:12.5px;"></p>
+
+      <div id="weftlyImportMapping" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12.5px;">We couldn't automatically recognize the name column in this file — pick it below.</p>
+        <div class="row">
+          <div class="field">
+            <label for="weftlyImportMapName">Name column</label>
+            <select id="weftlyImportMapName"></select>
+          </div>
+          <div class="field">
+            <label for="weftlyImportMapEmail">Email column (optional)</label>
+            <select id="weftlyImportMapEmail"></select>
+          </div>
+        </div>
+        <button type="button" class="btn secondary small" id="weftlyImportMapContinue">Continue</button>
+      </div>
+
+      <div id="weftlyImportPreview" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12.5px;" id="weftlyImportSummary"></p>
+        <div class="table-scroll" style="max-height:320px; overflow-y:auto;">
+          <table>
+            <thead id="weftlyImportHead"></thead>
+            <tbody id="weftlyImportRows"></tbody>
+          </table>
+        </div>
+        <div id="weftlyImportErrors" style="margin-top:8px; font-size:12.5px;"></div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button type="button" class="btn primary" id="weftlyImportConfirm">Import</button>
+          <button type="button" class="btn secondary" id="weftlyImportCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Reset data</h2>
       <button type="button" class="btn danger" id="openResetPanelBtn">Reset data…</button>
 
@@ -1964,6 +2014,43 @@ function formatDate(iso) {
   if (fmt === 'DD/MM/YYYY') return `${d}/${mo}/${y}`;
   if (fmt === 'YYYY-MM-DD') return `${y}-${mo}-${d}`;
   return `${mo}/${d}/${y}`;
+}
+
+/**
+ * Inverse of formatDate() — parses a date string written in the CURRENT
+ * user's configured dateFormat (i.e. matching what their own CSV export
+ * would have produced) back into the canonical ISO 'YYYY-MM-DD' this app
+ * stores everywhere. Returns null on anything that doesn't cleanly parse
+ * as a real calendar date (including e.g. "02/30/2026") — callers turn
+ * that into a per-row import error rather than guess at what was meant.
+ */
+function parseWeftlyDate(s) {
+  const raw = String(s == null ? '' : s).trim();
+  if (!raw) return null;
+
+  // Already ISO regardless of the current dateFormat setting — accept it
+  // outright, rather than force it to match whatever format happens to be
+  // selected right now (also makes YYYY-MM-DD exports always round-trip).
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(raw)) {
+    const [y, mo, d] = raw.split('-');
+    return isValidCalendarDateParts(y, mo, d) ? `${y.padStart(4, '0')}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}` : null;
+  }
+
+  const parts = raw.split('/');
+  if (parts.length !== 3) return null;
+  let mo, d, y;
+  if (STATE.settings.dateFormat === 'DD/MM/YYYY') { [d, mo, y] = parts; } else { [mo, d, y] = parts; } // MM/DD/YYYY is also the fallback default
+
+  if (!isValidCalendarDateParts(y, mo, d)) return null;
+  return `${y.padStart(4, '0')}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+/** True when y/mo/d are numeric and round-trip through Date exactly — catches e.g. Feb 30 or month 13, which regex/range checks alone would miss. */
+function isValidCalendarDateParts(y, mo, d) {
+  if (!/^\d{1,4}$/.test(y) || !/^\d{1,2}$/.test(mo) || !/^\d{1,2}$/.test(d)) return false;
+  const yn = Number(y), mon = Number(mo), dn = Number(d);
+  const dt = new Date(Date.UTC(yn, mon - 1, dn));
+  return dt.getUTCFullYear() === yn && dt.getUTCMonth() === mon - 1 && dt.getUTCDate() === dn;
 }
 
 function todayISO() {
@@ -3844,6 +3931,489 @@ function exportAllCsv() {
   exportClientsCsv();
 }
 
+/* =========================================================================
+   Import Weftling's own CSV/XLSX export (Settings) — round-trips with
+   exportTimeCsv/exportMaterialsCsv/exportClientsCsv above, so a file
+   exported from this app can come back in without hand-editing headers.
+   Deliberately separate from the Clients-tab "Import customers" feature
+   above, which is for Xero/QuickBooks accounting exports and has different
+   matching rules (no rate/increment/hours/qty in those files at all).
+
+   Reuses parseImportFile/loadPapaParse/loadXlsx/sanitizeImportedText/
+   detectColumn from that same section — this is a new UI and new per-type
+   matching logic, not a new file-reading layer.
+   ========================================================================= */
+const WEFTLY_IMPORT_MAX_FILE_BYTES = 5 * 1024 * 1024; // your own time/materials history can reasonably be bigger than a customer list
+
+const WEFTLY_TIME_HEADER_ALIASES = {
+  date: ['date'],
+  client: ['client'],
+  description: ['description'],
+  actualHours: ['actual hours', 'actualhours', 'hours'],
+  rate: ['rate'],
+  start: ['start'],
+  end: ['end'],
+  breakMin: ['break (min)', 'break min', 'break'],
+  billable: ['billable'],
+  invoiced: ['invoiced'],
+};
+const WEFTLY_MATERIALS_HEADER_ALIASES = {
+  date: ['date'],
+  client: ['client'],
+  description: ['description'],
+  qty: ['qty', 'quantity'],
+  unitCost: ['unit cost', 'unitcost'],
+  markup: ['markup %', 'markup', 'markuppct'],
+  billable: ['billable'],
+  invoiced: ['invoiced'],
+};
+
+let weftlyImportState = { type: 'time', rows: [], headers: [], candidates: [], errors: [] };
+
+/** Same (date, client, description) triple for both a freshly-parsed row and an existing STATE entry, so the two can be compared as "the same real-world entry." */
+function weftlyMatchKey(date, clientName, description) {
+  return `${date}|${String(clientName || '').trim().toLowerCase()}|${description.trim().toLowerCase()}`;
+}
+
+/** Groups existing entries by match key so each can be "consumed" at most once per import run — see the module comment above buildTimeImportCandidates for why that matters. */
+function weftlyGroupByMatchKey(entries) {
+  const byKey = new Map();
+  for (const e of entries) {
+    const c = clientById(e.clientId);
+    const key = weftlyMatchKey(e.date, c ? c.name : '', e.description);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(e);
+  }
+  return byKey;
+}
+
+/**
+ * Clients: identical matching approach to the existing Xero/QuickBooks
+ * importer (name match, case-insensitive) — but this format also carries
+ * Rate/Increment, so "update" additionally checks those, not just email.
+ */
+function buildClientsImportCandidates(rows, headers, nameColOverride, emailColOverride) {
+  const nameCol = nameColOverride || detectColumn(headers, ['name']);
+  if (!nameCol) return { needsMapping: true };
+  const emailCol = emailColOverride !== undefined ? emailColOverride : detectColumn(headers, ['email']);
+  const rateCol = detectColumn(headers, ['rate']);
+  const incCol = detectColumn(headers, ['increment']);
+
+  const seenInFile = new Set();
+  const candidates = [];
+  const errors = [];
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 2; // 1 for header row, 1 for 0-index
+    const name = sanitizeImportedText(row[nameCol]);
+    if (!name) { errors.push({ row: rowNum, reason: 'Missing name.' }); return; }
+    const key = name.toLowerCase();
+    if (seenInFile.has(key)) { errors.push({ row: rowNum, reason: `Duplicate name "${name}" within this file — only the first occurrence is used.` }); return; }
+    seenInFile.add(key);
+
+    const email = emailCol ? sanitizeImportedText(row[emailCol]) : '';
+    const rateRaw = rateCol ? String(row[rateCol] ?? '').trim() : '';
+    const incRaw = incCol ? String(row[incCol] ?? '').trim() : '';
+    let rate = null, increment = null;
+    if (rateRaw !== '') {
+      rate = Number(rateRaw);
+      if (!Number.isFinite(rate) || rate < 0) { errors.push({ row: rowNum, reason: `Invalid rate "${rateRaw}".` }); return; }
+    }
+    if (incRaw !== '') {
+      increment = Number(incRaw);
+      if (!Number.isFinite(increment) || increment <= 0) { errors.push({ row: rowNum, reason: `Invalid increment "${incRaw}".` }); return; }
+    }
+
+    const existing = STATE.clients.find((c) => c.name.toLowerCase() === key);
+    let status;
+    if (!existing) status = 'new';
+    else if (email !== (existing.email || '') || rate !== existing.rate || increment !== existing.increment) status = 'update';
+    else status = 'unchanged';
+    candidates.push({ name, email, rate, increment, existingId: existing ? existing.id : null, status });
+  });
+  return { candidates, errors };
+}
+
+/**
+ * Time entries have no id/reference column in the export, so there's no
+ * single obviously-correct "this file row is that DB row" key. Using
+ * (date, client, description) — the fields that identify *which* entry
+ * this is, not what it's worth — and consuming each existing entry at most
+ * once per import run: if two entries legitimately share that triple (two
+ * real sessions logged with identical text), the first file row
+ * matches/updates the first one, and the second file row — same key, but
+ * that entry's already consumed — becomes a fresh insert instead of
+ * double-matching or overwriting the same row twice.
+ *
+ * `increment` isn't in the export at all (nothing to round-trip), so it's
+ * deliberately left off the comparison and off the candidate — new rows
+ * get the client's effective increment at write time, updates keep
+ * whatever the existing entry already has.
+ */
+function buildTimeImportCandidates(rows, headers) {
+  const cols = {};
+  for (const [field, aliases] of Object.entries(WEFTLY_TIME_HEADER_ALIASES)) {
+    cols[field] = detectColumn(headers, aliases);
+  }
+  const required = ['date', 'client', 'description', 'actualHours', 'rate'];
+  const missing = required.filter((f) => !cols[f]);
+  if (missing.length) {
+    return { headerError: `Missing required column(s): ${missing.map((f) => WEFTLY_TIME_HEADER_ALIASES[f][0]).join(', ')}.` };
+  }
+
+  const byKey = weftlyGroupByMatchKey(STATE.time);
+  const candidates = [];
+  const errors = [];
+
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 2;
+    const description = sanitizeImportedText(row[cols.description]);
+    if (!description) { errors.push({ row: rowNum, reason: 'Missing description.' }); return; }
+
+    const date = parseWeftlyDate(row[cols.date]);
+    if (!date) { errors.push({ row: rowNum, reason: `Unrecognized date "${row[cols.date]}".` }); return; }
+
+    const clientName = sanitizeImportedText(row[cols.client]);
+    const client = clientName ? STATE.clients.find((c) => c.name.toLowerCase() === clientName.toLowerCase()) : null;
+    if (!client) { errors.push({ row: rowNum, reason: `Unknown client "${clientName || '(blank)'}" — import or add this client first.` }); return; }
+
+    const hoursRaw = String(row[cols.actualHours] ?? '').trim();
+    const hours = Number(hoursRaw);
+    if (!Number.isFinite(hours) || hours < 0) { errors.push({ row: rowNum, reason: `Invalid hours "${hoursRaw}".` }); return; }
+
+    const rateRaw = String(row[cols.rate] ?? '').trim();
+    const rate = Number(rateRaw);
+    if (!Number.isFinite(rate) || rate < 0) { errors.push({ row: rowNum, reason: `Invalid rate "${rateRaw}".` }); return; }
+
+    const startRaw = cols.start ? String(row[cols.start] ?? '').trim() : '';
+    const endRaw = cols.end ? String(row[cols.end] ?? '').trim() : '';
+    const isClock = Boolean(startRaw && endRaw);
+    const breakRaw = cols.breakMin ? String(row[cols.breakMin] ?? '').trim() : '';
+
+    const billable = cols.billable ? /^yes$/i.test(String(row[cols.billable] ?? '').trim()) : true;
+    const invoiced = cols.invoiced ? /^yes$/i.test(String(row[cols.invoiced] ?? '').trim()) : false;
+
+    const candidate = {
+      clientId: client.id,
+      clientName: client.name,
+      date,
+      description,
+      minutes: Math.round(hours * 60),
+      rate,
+      billable,
+      invoiced,
+      entryMode: isClock ? 'clock' : 'duration',
+      clockStart: isClock ? canonicalClockValue(startRaw) : null,
+      clockEnd: isClock ? canonicalClockValue(endRaw) : null,
+      clockBreakMinutes: isClock ? (Number(breakRaw) || 0) : null,
+    };
+
+    const bucket = byKey.get(weftlyMatchKey(date, client.name, description));
+    const existing = bucket && bucket.length ? bucket.shift() : null; // consumed — see module comment
+
+    if (existing) {
+      const changed = existing.minutes !== candidate.minutes
+        || Number(existing.rate) !== candidate.rate
+        || existing.billable !== candidate.billable
+        || existing.invoiced !== candidate.invoiced
+        || existing.entryMode !== candidate.entryMode
+        || (existing.clockStart || null) !== candidate.clockStart
+        || (existing.clockEnd || null) !== candidate.clockEnd
+        || (existing.clockBreakMinutes ?? null) !== candidate.clockBreakMinutes;
+      candidates.push({ ...candidate, existingId: existing.id, status: changed ? 'update' : 'unchanged' });
+    } else {
+      candidates.push({ ...candidate, existingId: null, status: 'new' });
+    }
+  });
+
+  return { candidates, errors };
+}
+
+/** Materials: same (date, client, description) matching strategy as time entries, without the clock/entryMode complexity. */
+function buildMaterialsImportCandidates(rows, headers) {
+  const cols = {};
+  for (const [field, aliases] of Object.entries(WEFTLY_MATERIALS_HEADER_ALIASES)) {
+    cols[field] = detectColumn(headers, aliases);
+  }
+  const required = ['date', 'client', 'description', 'qty', 'unitCost'];
+  const missing = required.filter((f) => !cols[f]);
+  if (missing.length) {
+    return { headerError: `Missing required column(s): ${missing.map((f) => WEFTLY_MATERIALS_HEADER_ALIASES[f][0]).join(', ')}.` };
+  }
+
+  const byKey = weftlyGroupByMatchKey(STATE.materials);
+  const candidates = [];
+  const errors = [];
+
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 2;
+    const description = sanitizeImportedText(row[cols.description]);
+    if (!description) { errors.push({ row: rowNum, reason: 'Missing description.' }); return; }
+
+    const date = parseWeftlyDate(row[cols.date]);
+    if (!date) { errors.push({ row: rowNum, reason: `Unrecognized date "${row[cols.date]}".` }); return; }
+
+    const clientName = sanitizeImportedText(row[cols.client]);
+    const client = clientName ? STATE.clients.find((c) => c.name.toLowerCase() === clientName.toLowerCase()) : null;
+    if (!client) { errors.push({ row: rowNum, reason: `Unknown client "${clientName || '(blank)'}" — import or add this client first.` }); return; }
+
+    const qtyRaw = String(row[cols.qty] ?? '').trim();
+    const qty = Number(qtyRaw);
+    if (!Number.isFinite(qty) || qty < 0) { errors.push({ row: rowNum, reason: `Invalid quantity "${qtyRaw}".` }); return; }
+
+    const unitCostRaw = String(row[cols.unitCost] ?? '').trim();
+    const unitCost = Number(unitCostRaw);
+    if (!Number.isFinite(unitCost) || unitCost < 0) { errors.push({ row: rowNum, reason: `Invalid unit cost "${unitCostRaw}".` }); return; }
+
+    const markupRaw = cols.markup ? String(row[cols.markup] ?? '').trim() : '';
+    let markupPct = 0;
+    if (markupRaw !== '') {
+      markupPct = Number(markupRaw);
+      if (!Number.isFinite(markupPct) || markupPct < 0) { errors.push({ row: rowNum, reason: `Invalid markup "${markupRaw}".` }); return; }
+    }
+
+    const billable = cols.billable ? /^yes$/i.test(String(row[cols.billable] ?? '').trim()) : true;
+    const invoiced = cols.invoiced ? /^yes$/i.test(String(row[cols.invoiced] ?? '').trim()) : false;
+
+    const candidate = { clientId: client.id, clientName: client.name, date, description, qty, unitCost, markupPct, billable, invoiced };
+
+    const bucket = byKey.get(weftlyMatchKey(date, client.name, description));
+    const existing = bucket && bucket.length ? bucket.shift() : null;
+
+    if (existing) {
+      const changed = existing.qty !== candidate.qty
+        || Number(existing.unitCost) !== candidate.unitCost
+        || (existing.markupPct || 0) !== candidate.markupPct
+        || existing.billable !== candidate.billable
+        || existing.invoiced !== candidate.invoiced;
+      candidates.push({ ...candidate, existingId: existing.id, status: changed ? 'update' : 'unchanged' });
+    } else {
+      candidates.push({ ...candidate, existingId: null, status: 'new' });
+    }
+  });
+
+  return { candidates, errors };
+}
+
+function showWeftlyImportMapping(headers) {
+  const options = headers.map((h) => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
+  document.getElementById('weftlyImportMapName').innerHTML = options;
+  document.getElementById('weftlyImportMapEmail').innerHTML = '<option value="">— none —</option>' + options;
+  document.getElementById('weftlyImportPreview').style.display = 'none';
+  document.getElementById('weftlyImportMapping').style.display = '';
+}
+
+function renderWeftlyImportPreview() {
+  const { type, candidates, errors } = weftlyImportState;
+  const counts = candidates.reduce((acc, c) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc; }, {});
+  const summaryParts = [`${counts.new || 0} new`, `${counts.update || 0} to update`, `${counts.unchanged || 0} already up to date`];
+  if (errors.length) summaryParts.push(`${errors.length} row(s) with errors (skipped)`);
+  document.getElementById('weftlyImportSummary').textContent =
+    `${candidates.length + errors.length} row(s) found — ${summaryParts.join(', ')}.`;
+
+  const statusPill = {
+    new: '<span class="pill billable">New</span>',
+    update: '<span class="pill invoiced">Will update</span>',
+    unchanged: '<span class="pill nonbillable">No change</span>',
+  };
+  const head = document.getElementById('weftlyImportHead');
+  const body = document.getElementById('weftlyImportRows');
+  const shown = candidates.slice(0, IMPORT_PREVIEW_ROW_CAP);
+  const colCount = type === 'clients' ? 5 : 6;
+
+  if (type === 'clients') {
+    head.innerHTML = '<tr><th>Name</th><th>Email</th><th class="num">Rate</th><th class="num">Increment</th><th>Status</th></tr>';
+    body.innerHTML = shown.map((c) => `
+      <tr>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${escapeHtml(c.email || '')}</td>
+        <td class="num">${c.rate != null ? formatMoney(c.rate) : '<span class="muted">default</span>'}</td>
+        <td class="num">${c.increment != null ? c.increment : '<span class="muted">default</span>'}</td>
+        <td>${statusPill[c.status]}</td>
+      </tr>`).join('') || `<tr class="empty-row"><td colspan="${colCount}">No importable rows found.</td></tr>`;
+  } else if (type === 'time') {
+    head.innerHTML = '<tr><th>Date</th><th>Client</th><th>Description</th><th class="num">Hours</th><th class="num">Rate</th><th>Status</th></tr>';
+    body.innerHTML = shown.map((c) => `
+      <tr>
+        <td>${formatDate(c.date)}</td>
+        <td>${escapeHtml(c.clientName)}</td>
+        <td>${escapeHtml(c.description)}</td>
+        <td class="num">${(c.minutes / 60).toFixed(2)}</td>
+        <td class="num">${formatMoney(c.rate)}</td>
+        <td>${statusPill[c.status]}</td>
+      </tr>`).join('') || `<tr class="empty-row"><td colspan="${colCount}">No importable rows found.</td></tr>`;
+  } else {
+    head.innerHTML = '<tr><th>Date</th><th>Client</th><th>Description</th><th class="num">Qty</th><th class="num">Unit cost</th><th>Status</th></tr>';
+    body.innerHTML = shown.map((c) => `
+      <tr>
+        <td>${formatDate(c.date)}</td>
+        <td>${escapeHtml(c.clientName)}</td>
+        <td>${escapeHtml(c.description)}</td>
+        <td class="num">${c.qty}</td>
+        <td class="num">${formatMoney(c.unitCost)}</td>
+        <td>${statusPill[c.status]}</td>
+      </tr>`).join('') || `<tr class="empty-row"><td colspan="${colCount}">No importable rows found.</td></tr>`;
+  }
+  if (candidates.length > IMPORT_PREVIEW_ROW_CAP) {
+    body.innerHTML += `<tr><td colspan="${colCount}" class="muted">…and ${candidates.length - IMPORT_PREVIEW_ROW_CAP} more (all will still be imported).</td></tr>`;
+  }
+
+  const errorsEl = document.getElementById('weftlyImportErrors');
+  if (errors.length) {
+    const shownErrors = errors.slice(0, 20);
+    errorsEl.innerHTML = `<div class="banner err">${errors.length} row(s) couldn't be imported:<br>` +
+      shownErrors.map((e) => `Row ${e.row}: ${escapeHtml(e.reason)}`).join('<br>') +
+      (errors.length > shownErrors.length ? `<br>…and ${errors.length - shownErrors.length} more.` : '') +
+      '</div>';
+  } else {
+    errorsEl.innerHTML = '';
+  }
+
+  document.getElementById('weftlyImportPreview').style.display = '';
+}
+
+function resetWeftlyImportUI() {
+  weftlyImportState = { type: document.getElementById('weftlyImportType').value, rows: [], headers: [], candidates: [], errors: [] };
+  document.getElementById('weftlyImportFile').value = '';
+  document.getElementById('weftlyImportStatus').textContent = '';
+  document.getElementById('weftlyImportMapping').style.display = 'none';
+  document.getElementById('weftlyImportPreview').style.display = 'none';
+}
+
+/** Writes exactly like every other insert/update in this app — through the same Db.insertManyX / Db.updateX functions (see the module comment above) — so the current session's own auth.uid() is what lands in user_id, never anything from the file. */
+async function confirmWeftlyImport() {
+  const { type, candidates } = weftlyImportState;
+  const btn = document.getElementById('weftlyImportConfirm');
+  btn.disabled = true;
+  let added = 0, updated = 0, unchanged = 0;
+  try {
+    if (type === 'clients') {
+      const toInsert = candidates.filter((c) => c.status === 'new')
+        .map((c) => ({ id: uid(), name: c.name, email: c.email || null, rate: c.rate, increment: c.increment }));
+      const toUpdate = candidates.filter((c) => c.status === 'update');
+      if (toInsert.length) await Db.insertManyClients(toInsert);
+      for (const c of toUpdate) {
+        const existing = clientById(c.existingId);
+        if (existing) await Db.updateClient({ ...existing, email: c.email || null, rate: c.rate, increment: c.increment });
+      }
+      added = toInsert.length; updated = toUpdate.length; unchanged = candidates.length - added - updated;
+    } else if (type === 'time') {
+      const toInsert = candidates.filter((c) => c.status === 'new').map((c) => ({
+        id: uid(), clientId: c.clientId, date: c.date, description: c.description,
+        minutes: c.minutes, rate: c.rate, increment: effectiveIncrementFor(c.clientId),
+        billable: c.billable, invoiced: c.invoiced, entryMode: c.entryMode,
+        clockStart: c.clockStart, clockEnd: c.clockEnd, clockBreakMinutes: c.clockBreakMinutes,
+      }));
+      const toUpdate = candidates.filter((c) => c.status === 'update');
+      if (toInsert.length) await Db.insertManyTime(toInsert);
+      for (const c of toUpdate) {
+        const existing = STATE.time.find((x) => x.id === c.existingId);
+        if (existing) {
+          await Db.updateTime({
+            ...existing, minutes: c.minutes, rate: c.rate, billable: c.billable, invoiced: c.invoiced,
+            entryMode: c.entryMode, clockStart: c.clockStart, clockEnd: c.clockEnd, clockBreakMinutes: c.clockBreakMinutes,
+          });
+        }
+      }
+      added = toInsert.length; updated = toUpdate.length; unchanged = candidates.length - added - updated;
+    } else {
+      const toInsert = candidates.filter((c) => c.status === 'new').map((c) => ({
+        id: uid(), clientId: c.clientId, date: c.date, description: c.description,
+        qty: c.qty, unitCost: c.unitCost, markupPct: c.markupPct, billable: c.billable, invoiced: c.invoiced,
+      }));
+      const toUpdate = candidates.filter((c) => c.status === 'update');
+      if (toInsert.length) await Db.insertManyMaterials(toInsert);
+      for (const c of toUpdate) {
+        const existing = STATE.materials.find((x) => x.id === c.existingId);
+        if (existing) {
+          await Db.updateMaterial({ ...existing, qty: c.qty, unitCost: c.unitCost, markupPct: c.markupPct, billable: c.billable, invoiced: c.invoiced });
+        }
+      }
+      added = toInsert.length; updated = toUpdate.length; unchanged = candidates.length - added - updated;
+    }
+    await loadState();
+    renderAll();
+    showBanner(`Import complete: ${added} added, ${updated} updated, ${unchanged} already up to date.`, 'ok', 6000);
+  } catch (err) {
+    showBanner('Import failed partway through: ' + err.message + '. Check the affected tab — some rows may already be in.', 'err', 10000);
+  } finally {
+    btn.disabled = false;
+    resetWeftlyImportUI();
+  }
+}
+
+function wireWeftlyImportCard() {
+  document.getElementById('weftlyImportFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > WEFTLY_IMPORT_MAX_FILE_BYTES) {
+      showBanner('That file is too large (max 5 MB).', 'err', 6000);
+      e.target.value = '';
+      return;
+    }
+
+    // Guess the type from the export's own filename convention
+    // (weftling-time-2026-07-30.csv etc) so re-importing an unmodified
+    // export just works without the user also having to remember to flip
+    // the dropdown — an explicit choice is still respected either way,
+    // since this only fires when a filename actually matches the pattern.
+    const m = /weftling-(time|materials|clients)-/i.exec(file.name);
+    if (m) document.getElementById('weftlyImportType').value = m[1].toLowerCase();
+    const type = document.getElementById('weftlyImportType').value;
+
+    document.getElementById('weftlyImportStatus').textContent = 'Reading file…';
+    try {
+      const rows = await parseImportFile(file);
+      if (!rows.length) throw new Error('No rows found in this file.');
+      const headers = Object.keys(rows[0]);
+      if (!headers.length) throw new Error('This file has no columns Weftling can read.');
+
+      weftlyImportState.type = type;
+      weftlyImportState.rows = rows;
+      weftlyImportState.headers = headers;
+
+      if (type === 'clients') {
+        const result = buildClientsImportCandidates(rows, headers);
+        if (result.needsMapping) {
+          showWeftlyImportMapping(headers);
+        } else {
+          weftlyImportState.candidates = result.candidates;
+          weftlyImportState.errors = result.errors;
+          document.getElementById('weftlyImportMapping').style.display = 'none';
+          renderWeftlyImportPreview();
+        }
+      } else {
+        const builder = type === 'time' ? buildTimeImportCandidates : buildMaterialsImportCandidates;
+        const result = builder(rows, headers);
+        if (result.headerError) throw new Error(result.headerError);
+        weftlyImportState.candidates = result.candidates;
+        weftlyImportState.errors = result.errors;
+        document.getElementById('weftlyImportMapping').style.display = 'none';
+        renderWeftlyImportPreview();
+      }
+      document.getElementById('weftlyImportStatus').textContent = '';
+    } catch (err) {
+      document.getElementById('weftlyImportStatus').textContent = '';
+      showBanner('Could not read this file: ' + err.message, 'err', 8000);
+    } finally {
+      e.target.value = '';
+    }
+  });
+
+  document.getElementById('weftlyImportMapContinue').addEventListener('click', () => {
+    const nameCol = document.getElementById('weftlyImportMapName').value;
+    const emailCol = document.getElementById('weftlyImportMapEmail').value || null;
+    if (!nameCol) { showBanner('Pick which column is the name.', 'err', 4000); return; }
+    const result = buildClientsImportCandidates(weftlyImportState.rows, weftlyImportState.headers, nameCol, emailCol);
+    weftlyImportState.candidates = result.candidates;
+    weftlyImportState.errors = result.errors;
+    document.getElementById('weftlyImportMapping').style.display = 'none';
+    renderWeftlyImportPreview();
+  });
+
+  document.getElementById('weftlyImportCancel').addEventListener('click', () => resetWeftlyImportUI());
+  document.getElementById('weftlyImportConfirm').addEventListener('click', () => confirmWeftlyImport());
+}
+
 /* ---- Reset data panel ---- */
 const RESET_CHECKBOX_IDS = ['resetTime', 'resetMaterials', 'resetClients', 'resetSettings'];
 
@@ -4380,6 +4950,7 @@ async function initApp() {
   wireMaterialsTab();
   wireClientsTab();
   wireImportClientsCard();
+  wireWeftlyImportCard();
   wireInvoiceTab();
   wireTimesheetTab();
   wireSettingsTab();
