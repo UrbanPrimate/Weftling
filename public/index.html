@@ -402,6 +402,9 @@
     <div class="brand-sub">a Fabbric tool</div>
     <div class="sub" id="authSubtitle">Sign in to your account</div>
     <div id="authBanner"></div>
+    <div id="authResendRow" style="display:none; margin:-6px 0 14px; text-align:center;">
+      <button type="button" id="authResendBtn" class="link-btn">Resend confirmation email</button>
+    </div>
     <form id="authForm">
       <div class="field">
         <label for="authEmail">Email</label>
@@ -4730,6 +4733,7 @@ function registerServiceWorker() {
    ========================================================================= */
 let appStarted = false; // guards against initApp() running twice
 let authMode = 'signin'; // 'signin' | 'signup' | 'forgot'
+let pendingConfirmationEmail = null; // email the "resend confirmation" button targets, if any
 
 function showAuthScreen() {
   CURRENT_USER = null;
@@ -4766,6 +4770,22 @@ function resetPasswordBanner(message, kind) {
   el.innerHTML = message ? `<div class="banner ${kind}">${escapeHtml(message)}</div>` : '';
 }
 
+// Shared verbatim between a genuine new signup and the already-registered
+// enumeration guard below, so the two remain indistinguishable from outside.
+function checkEmailBannerText(email) {
+  return `Check your email — we've sent a confirmation link to ${email}. Click it to activate your account, then sign in.`;
+}
+
+function showResendOption(email) {
+  pendingConfirmationEmail = email;
+  document.getElementById('authResendRow').style.display = '';
+}
+
+function hideResendOption() {
+  pendingConfirmationEmail = null;
+  document.getElementById('authResendRow').style.display = 'none';
+}
+
 function setAuthMode(mode) {
   authMode = mode;
   const passwordField = document.getElementById('authPasswordField');
@@ -4789,16 +4809,45 @@ function setAuthMode(mode) {
     document.getElementById('authPassword').required = true;
     forgotBtn.style.display = isSignup ? 'none' : '';
   }
-  authBanner('');
 }
 
 function wireAuthScreen() {
   document.getElementById('authToggleBtn').addEventListener('click', () => {
-    if (authMode === 'forgot') { setAuthMode('signin'); return; }
-    setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+    if (authMode === 'forgot') { setAuthMode('signin'); } else { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); }
+    authBanner('');
+    hideResendOption();
   });
 
-  document.getElementById('authForgotBtn').addEventListener('click', () => setAuthMode('forgot'));
+  document.getElementById('authForgotBtn').addEventListener('click', () => {
+    setAuthMode('forgot');
+    authBanner('');
+    hideResendOption();
+  });
+
+  document.getElementById('authResendBtn').addEventListener('click', async () => {
+    if (!SupabaseClient || !pendingConfirmationEmail) return;
+    const resendBtn = document.getElementById('authResendBtn');
+    resendBtn.disabled = true;
+    try {
+      const { error } = await SupabaseClient.auth.resend({
+        type: 'signup',
+        email: pendingConfirmationEmail,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      authBanner(`A new confirmation email is on its way to ${pendingConfirmationEmail} — check your inbox and spam folder.`, 'ok');
+    } catch (err) {
+      // Supabase throttles resend() (default: one request per ~60s) and
+      // reports it as a 429 with wording like "you can only request this
+      // after N seconds" rather than a structured error code — match on
+      // both the status and the message so the raw error never reaches
+      // the user as-is.
+      const isRateLimited = err.status === 429 || /rate limit|too many requests|only request this/i.test(err.message || '');
+      authBanner(isRateLimited ? 'Please wait a moment before requesting another email.' : (err.message || 'Something went wrong sending the email.'), 'err');
+    } finally {
+      resendBtn.disabled = false;
+    }
+  });
 
   document.getElementById('authForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4811,6 +4860,7 @@ function wireAuthScreen() {
     const btn = document.getElementById('authSubmitBtn');
     btn.disabled = true;
     authBanner('');
+    hideResendOption();
     try {
       if (authMode === 'forgot') {
         // Same-wording-either-way as the signup enumeration guard below: whether
@@ -4820,10 +4870,19 @@ function wireAuthScreen() {
           redirectTo: window.location.origin,
         });
         if (error) throw error;
-        authBanner('If that email has an account, check your inbox for a reset link.', 'info');
         setAuthMode('signin');
+        authBanner('If that email has an account, check your inbox for a reset link.', 'info');
       } else if (authMode === 'signup') {
-        const { data, error } = await SupabaseClient.auth.signUp({ email, password });
+        const { data, error } = await SupabaseClient.auth.signUp({
+          email,
+          password,
+          // Explicit rather than relying solely on the Supabase dashboard's
+          // Site URL: this makes the confirmation link land back on
+          // whichever origin the signup actually happened from (localhost
+          // in dev, the production domain in prod), as long as that origin
+          // is also in the dashboard's allowed redirect list.
+          options: { emailRedirectTo: window.location.origin },
+        });
         if (error) {
           // Supabase's default signup error reveals whether an email is
           // already registered ("User already registered"), which lets
@@ -4831,13 +4890,14 @@ function wireAuthScreen() {
           // that specific message. Fold that one case into the exact same
           // "check your email" wording a brand-new signup gets below — from
           // the outside, a retry on a registered email and a genuine new
-          // signup are now indistinguishable. Any other error (weak
-          // password, bad email format, rate limiting) still shows its real
-          // message, since those don't leak whether the account exists.
+          // signup are now indistinguishable, resend option included. Any
+          // other error (weak password, bad email format, rate limiting)
+          // still shows its real message, since those don't leak whether
+          // the account exists.
           if (/already registered|already exists/i.test(error.message || '')) {
-            authBanner('If that email can be registered, check your inbox for a confirmation link.', 'info', 8000);
             setAuthMode('signin');
-            btn.disabled = false;
+            showResendOption(email);
+            authBanner(checkEmailBannerText(email), 'info');
             return;
           }
           throw error;
@@ -4847,12 +4907,25 @@ function wireAuthScreen() {
           // doesn't return a session until the user clicks the link in their
           // inbox. If confirmation were off, data.session would be set here
           // and onAuthStateChange (wired below) would take it from there.
-          authBanner('Account created — check your email to confirm it, then sign in.', 'ok');
           setAuthMode('signin');
+          showResendOption(email);
+          authBanner(checkEmailBannerText(email), 'ok');
         }
       } else {
         const { error } = await SupabaseClient.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          // Supabase reports an unconfirmed email as its own distinct error
+          // rather than folding it into a generic bad-credentials failure.
+          // Surface that distinction instead of letting it fall into the
+          // catch below and read like a wrong password — confirming the
+          // email is the fix here, not retyping the password.
+          if (error.code === 'email_not_confirmed' || /email not confirmed/i.test(error.message || '')) {
+            showResendOption(email);
+            authBanner(`Your email isn't confirmed yet. Please check your inbox for the confirmation link we sent to ${email} — then sign in.`, 'info');
+            return;
+          }
+          throw error;
+        }
       }
     } catch (err) {
       authBanner(err.message || 'Something went wrong.', 'err');
