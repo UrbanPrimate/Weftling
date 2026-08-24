@@ -91,10 +91,9 @@
     top: calc(44px + env(safe-area-inset-top));
     z-index: 19;
     display: flex;
-    overflow-x: auto;
+    flex-wrap: wrap; /* tabs wrap to a second row on narrow screens instead of scrolling sideways */
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    -webkit-overflow-scrolling: touch;
   }
   nav.tabs button {
     flex: 0 0 auto;
@@ -112,6 +111,35 @@
   nav.tabs button.active {
     color: var(--teal);
     border-bottom-color: var(--teal);
+  }
+  /* Sub-tabs: a second row inside the sticky nav, shown only when a merged
+     tab (Tracking, Billing) is active. Pill style to read as a sub-level. */
+  nav.tabs .subtabs {
+    flex: 1 0 100%;
+    display: flex;
+    gap: 8px;
+    padding: 8px 14px 10px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  nav.tabs .subtabs[hidden] { display: none; }
+  nav.tabs .subtabs button {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-size: 12.5px;
+    background: var(--surface);
+    color: var(--text-muted);
+  }
+  nav.tabs .subtabs button.active {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #fff;
+  }
+  @media (max-width: 480px) {
+    nav.tabs button { padding: 10px 10px; font-size: 12.5px; }
+    nav.tabs .subtabs { padding: 6px 10px 8px; }
+    nav.tabs .subtabs button { padding: 4px 12px; font-size: 12px; }
   }
 
   main {
@@ -464,12 +492,18 @@
 
 <nav class="tabs" id="tabNav">
   <button data-tab="overview" class="active">Overview</button>
-  <button data-tab="time">Time</button>
-  <button data-tab="materials">Materials</button>
+  <button data-tab="tracking">Tracking</button>
   <button data-tab="clients">Clients</button>
-  <button data-tab="invoice">Invoice</button>
-  <button data-tab="timesheet">Timesheet</button>
+  <button data-tab="billing">Billing</button>
   <button data-tab="settings">Settings</button>
+  <!-- Sub-tabs for the merged Tracking (Time/Materials) and Billing (Invoice/Timesheet) tabs.
+       Lives inside the nav so the existing delegated click handler covers these buttons too. -->
+  <div class="subtabs" id="subNav" hidden>
+    <button data-tab="time">Time</button>
+    <button data-tab="materials">Materials</button>
+    <button data-tab="invoice">Invoice</button>
+    <button data-tab="timesheet">Timesheet</button>
+  </div>
 </nav>
 
 <main>
@@ -882,6 +916,23 @@
         </div>
         <div id="invXeroResult" style="margin-top:10px;"></div>
       </div>
+
+      <div id="invQboSection" style="display:none; margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+        <div class="row">
+          <div class="field">
+            <label for="invQboCustomer">QuickBooks customer</label>
+            <select id="invQboCustomer"></select>
+          </div>
+          <div class="field">
+            <label for="invQboItem">Product/Service for these lines <span class="help-icon" tabindex="0" title="QuickBooks requires every invoice line to reference a Product/Service. All lines on this invoice will use this one; each line keeps its own description, quantity, and rate.">?</span></label>
+            <select id="invQboItem"></select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="invCreateQbo">Create invoice in QuickBooks</button>
+        </div>
+        <div id="invQboResult" style="margin-top:10px;"></div>
+      </div>
     </div>
   </section>
 
@@ -1074,6 +1125,25 @@
     </div>
 
     <div class="card">
+      <h2>QuickBooks connection</h2>
+      <p class="muted" style="font-size:12.5px; margin-top:-6px;">Connect your own QuickBooks Online company to pull live customers and products/services and create invoices directly in QuickBooks. Entirely optional — the CSV export below works whether or not you connect.</p>
+      <p id="qboStatusText" class="muted">Checking…</p>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="qboConnectBtn" style="display:none;">Connect to QuickBooks</button>
+        <button type="button" class="btn danger" id="qboDisconnectBtn" style="display:none;">Disconnect</button>
+      </div>
+
+      <div id="qboPullSection" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12px; margin-top:0;">Pull live data from your connected QuickBooks company into Weftling.</p>
+        <div class="btn-row">
+          <button type="button" class="btn secondary small" id="qboPullCustomersBtn">Pull customers</button>
+          <button type="button" class="btn secondary small" id="qboPullItemsBtn">Pull products/services</button>
+        </div>
+        <div id="qboPullResult" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Accounting software (optional)</h2>
       <p class="muted" style="font-size:12.5px; margin-top:-6px;">If you import invoices into Xero or QuickBooks, these settings pre-fill the right fields so you don't have to map them each time. Leave blank if you don't use these — your CSV still works.</p>
 
@@ -1104,8 +1174,9 @@
 
       <div id="qbExportFields" style="display:none;">
         <div class="field">
-          <label for="setQbProductService">Product/Service name <span class="help-icon" tabindex="0" title="Optional. The product or service these invoices map to in QuickBooks (e.g. 'Consulting'). QuickBooks lets you map columns during import, so you can also leave this blank.">?</span></label>
-          <input type="text" id="setQbProductService" placeholder="e.g. Consulting" />
+          <label for="setQbProductService">Product/Service name <span class="help-icon" tabindex="0" title="The product or service invoice lines map to in QuickBooks (e.g. 'Consulting'). Used as the default when creating invoices in QuickBooks directly, and by the CSV import mapping. Connect QuickBooks above for live suggestions.">?</span></label>
+          <input type="text" id="setQbProductService" placeholder="e.g. Consulting" list="setQbProductServiceList" autocomplete="off" />
+          <datalist id="setQbProductServiceList"></datalist>
         </div>
         <p class="muted" style="font-size:12px;">QuickBooks matches customers by name, so make sure client names here match your QuickBooks customers.</p>
       </div>
@@ -1271,14 +1342,15 @@ let XERO_ACCOUNTS_CACHE = null;
 let XERO_TAXRATES_CACHE = null;
 
 /**
- * Calls one of our own /api/xero/* endpoints with the current Supabase
- * session attached. Throws on any non-2xx response; the error carries
- * `.code` (the backend's machine-readable reason) and `.needsReconnect`
- * (true for insufficient_scope/xero_unauthorized — the "Xero connection
- * needs reconnecting" case called out in the project's known gotchas) so
- * callers can show the right prompt instead of a generic failure message.
+ * Calls one of our own /api/* endpoints (Xero or QuickBooks alike) with the
+ * current Supabase session attached. Throws on any non-2xx response; the
+ * error carries `.code` (the backend's machine-readable reason) and
+ * `.needsReconnect` (true for insufficient_scope / xero_unauthorized /
+ * qbo_unauthorized — the "connection needs reconnecting" case) so callers
+ * can show the right prompt instead of a generic failure message. Which
+ * provider to re-connect is known at each call site, not here.
  */
-async function xeroApiFetch(path, options) {
+async function apiFetch(path, options) {
   options = options || {};
   if (!SupabaseClient) throw new Error('Supabase isn’t configured.');
   const { data: { session } } = await SupabaseClient.auth.getSession();
@@ -1302,7 +1374,7 @@ async function xeroApiFetch(path, options) {
     const err = new Error((body && body.message) || `Request to ${path} failed (${res.status}).`);
     err.code = code;
     err.status = res.status;
-    err.needsReconnect = code === 'insufficient_scope' || code === 'xero_unauthorized';
+    err.needsReconnect = code === 'insufficient_scope' || code === 'xero_unauthorized' || code === 'qbo_unauthorized';
     err.notConnected = code === 'not_connected';
     throw err;
   }
@@ -1320,7 +1392,7 @@ async function xeroApiFetch(path, options) {
 /** Refreshes XERO_STATUS from the backend and re-renders anywhere it's shown. Safe to call anytime, including while signed out (falls back to disconnected). */
 async function refreshXeroStatus() {
   try {
-    XERO_STATUS = await xeroApiFetch('/api/xero/status');
+    XERO_STATUS = await apiFetch('/api/xero/status');
   } catch (e) {
     console.error('refreshXeroStatus failed:', e);
     XERO_STATUS = { connected: false };
@@ -1392,7 +1464,7 @@ async function renderXeroAccountingLists() {
 
   try {
     if (!XERO_ACCOUNTS_CACHE) {
-      const result = await xeroApiFetch('/api/xero/accounts');
+      const result = await apiFetch('/api/xero/accounts');
       XERO_ACCOUNTS_CACHE = result.accounts;
     }
     accList.innerHTML = XERO_ACCOUNTS_CACHE
@@ -1403,7 +1475,7 @@ async function renderXeroAccountingLists() {
 
   try {
     if (!XERO_TAXRATES_CACHE) {
-      const result = await xeroApiFetch('/api/xero/taxrates');
+      const result = await apiFetch('/api/xero/taxrates');
       XERO_TAXRATES_CACHE = result.taxRates;
     }
     taxList.innerHTML = XERO_TAXRATES_CACHE
@@ -1430,7 +1502,7 @@ async function connectXero() {
   if (btn) btn.disabled = true;
   hideXeroTenantPicker();
   try {
-    const { token } = await xeroApiFetch('/api/xero/connect-session', { method: 'POST' });
+    const { token } = await apiFetch('/api/xero/connect-session', { method: 'POST' });
     // @nangohq/frontend's built bundle exports the Nango class as the
     // default export only (confirmed by fetching the actual jsdelivr +esm
     // output: `export{a as AuthError,w as ConnectUI,U as default}` — no
@@ -1460,7 +1532,7 @@ async function connectXero() {
  */
 async function finalizeXeroConnection(connectionId, tenantId) {
   try {
-    const result = await xeroApiFetch('/api/xero/finalize', {
+    const result = await apiFetch('/api/xero/finalize', {
       method: 'POST',
       body: tenantId ? { connectionId, tenantId } : { connectionId },
     });
@@ -1508,7 +1580,7 @@ async function confirmXeroTenantSelection() {
 async function disconnectXero() {
   if (!confirm('Disconnect Weftling from Xero?')) return;
   try {
-    await xeroApiFetch('/api/xero/disconnect', { method: 'POST' });
+    await apiFetch('/api/xero/disconnect', { method: 'POST' });
     showBanner('Disconnected from Xero.', 'info', 4000);
   } catch (e) {
     showBanner('Disconnect failed: ' + e.message, 'err', 6000);
@@ -1547,7 +1619,7 @@ async function pullXeroCustomers() {
   btn.disabled = true;
   resultEl.textContent = 'Pulling customers…';
   try {
-    const result = await xeroApiFetch('/api/xero/pull-customers', { method: 'POST' });
+    const result = await apiFetch('/api/xero/pull-customers', { method: 'POST' });
     resultEl.textContent = `Pulled ${result.pulled} customers — ${result.created} new, ${result.updated} updated.`;
     await loadState();
     renderClients();
@@ -1573,7 +1645,7 @@ async function pullXeroItems() {
   btn.disabled = true;
   resultEl.textContent = 'Pulling items…';
   try {
-    const result = await xeroApiFetch('/api/xero/items');
+    const result = await apiFetch('/api/xero/items');
     XERO_ITEMS_CACHE = result.items;
     resultEl.textContent = `Pulled ${result.items.length} items.`;
     renderXeroItemPickers();
@@ -1599,8 +1671,8 @@ async function pullXeroAccountsAndTaxTypes() {
   resultEl.textContent = 'Pulling accounts & tax types…';
   try {
     const [accountsResult, taxRatesResult] = await Promise.all([
-      xeroApiFetch('/api/xero/accounts'),
-      xeroApiFetch('/api/xero/taxrates'),
+      apiFetch('/api/xero/accounts'),
+      apiFetch('/api/xero/taxrates'),
     ]);
     XERO_ACCOUNTS_CACHE = accountsResult.accounts;
     XERO_TAXRATES_CACHE = taxRatesResult.taxRates;
@@ -1613,6 +1685,190 @@ async function pullXeroAccountsAndTaxTypes() {
     } else {
       resultEl.textContent = '';
       showBanner('Could not pull accounts/tax types: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* =========================================================================
+   QuickBooks integration — same architecture as the Xero block above: talks
+   only to this app's own /api/quickbooks/* endpoints, never to Intuit or
+   Nango directly; no Intuit credential of any kind ever reaches this page.
+   Simpler than Xero in one way: an Intuit authorization covers exactly one
+   company, so there's no tenant-selection round-trip.
+   ========================================================================= */
+let QBO_STATUS = { connected: false, companyName: null };
+let QBO_CUSTOMERS_CACHE = null;
+let QBO_ITEMS_CACHE = null;
+
+/** Refreshes QBO_STATUS from the backend and re-renders anywhere it's shown. Safe to call anytime (falls back to disconnected). */
+async function refreshQboStatus() {
+  try {
+    QBO_STATUS = await apiFetch('/api/quickbooks/status');
+  } catch (e) {
+    console.error('refreshQboStatus failed:', e);
+    QBO_STATUS = { connected: false };
+  }
+  QBO_CUSTOMERS_CACHE = null;
+  QBO_ITEMS_CACHE = null;
+  renderQboConnectionPanel();
+  await renderQboProductServiceList();
+  if (currentPreview) renderInvoicePreview();
+}
+
+function renderQboConnectionPanel() {
+  const statusText = document.getElementById('qboStatusText');
+  const connectBtn = document.getElementById('qboConnectBtn');
+  const disconnectBtn = document.getElementById('qboDisconnectBtn');
+  const pullSection = document.getElementById('qboPullSection');
+  if (!statusText || !connectBtn || !disconnectBtn) return; // Settings tab not rendered yet
+
+  if (QBO_STATUS.connected) {
+    statusText.textContent = 'Connected to ' + (QBO_STATUS.companyName || 'your QuickBooks company') + '.';
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = '';
+    if (pullSection) pullSection.style.display = '';
+  } else {
+    statusText.textContent = 'Not connected.';
+    connectBtn.style.display = '';
+    disconnectBtn.style.display = 'none';
+    if (pullSection) {
+      pullSection.style.display = 'none';
+      document.getElementById('qboPullResult').innerHTML = '';
+    }
+  }
+}
+
+/**
+ * Backs the Settings "Product/Service name" field with live suggestions
+ * from the connected company, the way Xero's account/tax fields work —
+ * including the lazy fetch: when connected with a cold cache, this loads
+ * the items itself (so the datalist populates on app start / connect, not
+ * only after a manual "Pull products/services").
+ */
+async function renderQboProductServiceList() {
+  const list = document.getElementById('setQbProductServiceList');
+  if (!list) return; // Settings tab not rendered yet
+  if (!QBO_STATUS.connected) {
+    list.innerHTML = '';
+    return;
+  }
+  if (!QBO_ITEMS_CACHE) {
+    try {
+      QBO_ITEMS_CACHE = (await apiFetch('/api/quickbooks/items')).items;
+    } catch (e) {
+      console.error('Loading QuickBooks items failed:', e);
+    }
+  }
+  list.innerHTML = (QBO_ITEMS_CACHE || [])
+    .map((it) => `<option value="${escapeHtml(it.name)}"></option>`)
+    .join('');
+}
+
+async function connectQuickBooks() {
+  const btn = document.getElementById('qboConnectBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const { token } = await apiFetch('/api/quickbooks/connect-session', { method: 'POST' });
+    // Same lazy-loaded Nango Connect UI as connectXero() — see the comment
+    // there for why `.default` (not a named export) is the class.
+    const { default: Nango } = await import('https://cdn.jsdelivr.net/npm/@nangohq/frontend/+esm');
+    const nango = new Nango({ connectSessionToken: token });
+    nango.openConnectUI({
+      onEvent: async (event) => {
+        if (event.type !== 'connect') return;
+        await finalizeQboConnection(event.payload.connectionId);
+      },
+    });
+  } catch (e) {
+    showBanner('Could not start the QuickBooks connection: ' + e.message, 'err', 6000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function finalizeQboConnection(connectionId) {
+  try {
+    await apiFetch('/api/quickbooks/finalize', { method: 'POST', body: { connectionId } });
+    showBanner('Connected to QuickBooks.', 'ok', 4000);
+  } catch (e) {
+    showBanner('QuickBooks authorized, but finalizing the connection failed: ' + e.message, 'err', 8000);
+  }
+  await refreshQboStatus();
+}
+
+async function disconnectQuickBooks() {
+  if (!confirm('Disconnect Weftling from QuickBooks?')) return;
+  try {
+    await apiFetch('/api/quickbooks/disconnect', { method: 'POST' });
+    showBanner('Disconnected from QuickBooks.', 'info', 4000);
+  } catch (e) {
+    showBanner('Disconnect failed: ' + e.message, 'err', 6000);
+  }
+  await refreshQboStatus();
+}
+
+/** QuickBooks twin of renderXeroReconnectPrompt — same banner, wired to connectQuickBooks(). */
+function renderQboReconnectPrompt(container, err) {
+  container.innerHTML = '';
+  const banner = document.createElement('div');
+  banner.className = 'banner err';
+  banner.append('QuickBooks connection needs reconnecting: ' + err.message + ' ');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'link-btn';
+  btn.textContent = 'Reconnect';
+  btn.addEventListener('click', () => connectQuickBooks());
+  banner.appendChild(btn);
+  container.appendChild(banner);
+}
+
+/** POST /api/quickbooks/pull-customers — syncs QBO customers into this user's own `clients`, then reloads STATE (mirrors pullXeroCustomers). */
+async function pullQboCustomers() {
+  const btn = document.getElementById('qboPullCustomersBtn');
+  const resultEl = document.getElementById('qboPullResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Pulling customers…';
+  try {
+    const result = await apiFetch('/api/quickbooks/pull-customers', { method: 'POST' });
+    resultEl.textContent = `Pulled ${result.pulled} customers — ${result.created} new, ${result.updated} updated.`;
+    await loadState();
+    renderClients();
+    renderInvoiceClientOptions();
+    renderOverview();
+    showBanner('Customers pulled from QuickBooks.', 'ok', 4000);
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderQboReconnectPrompt(resultEl, e);
+    } else {
+      resultEl.textContent = '';
+      showBanner('Could not pull customers: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** GET /api/quickbooks/items — refreshes QBO_ITEMS_CACHE, the Settings datalist, and the invoice-tab Product/Service picker. */
+async function pullQboItems() {
+  const btn = document.getElementById('qboPullItemsBtn');
+  const resultEl = document.getElementById('qboPullResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Pulling products/services…';
+  try {
+    const result = await apiFetch('/api/quickbooks/items');
+    QBO_ITEMS_CACHE = result.items;
+    resultEl.textContent = `Pulled ${result.items.length} products/services.`;
+    renderQboProductServiceList();
+    if (currentPreview) renderInvoicePreview();
+    showBanner('Products/services pulled from QuickBooks.', 'ok', 4000);
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderQboReconnectPrompt(resultEl, e);
+    } else {
+      resultEl.textContent = '';
+      showBanner('Could not pull products/services: ' + e.message, 'err', 8000);
     }
   } finally {
     btn.disabled = false;
@@ -1715,7 +1971,15 @@ function requireUser() {
 // ---- field mapping: JS camelCase (STATE, as before) <-> Postgres snake_case (the tables from Step 3) ----
 
 function clientToRow(c) {
-  return { id: c.id, name: c.name, email: c.email, rate: c.rate, increment: c.increment, xero_contact_id: c.xeroContactId };
+  return {
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    rate: c.rate,
+    increment: c.increment,
+    xero_contact_id: c.xeroContactId,
+    qbo_customer_id: c.qboCustomerId, // requires supabase/quickbooks_sync.sql to have been run
+  };
 }
 function clientFromRow(r) {
   return {
@@ -1725,6 +1989,12 @@ function clientFromRow(r) {
     rate: r.rate == null ? null : Number(r.rate),
     increment: r.increment,
     xeroContactId: r.xero_contact_id || null,
+    // Preserve ABSENCE, not just null: before quickbooks_sync.sql has run,
+    // rows come back without this column at all — mapping that to undefined
+    // (instead of null) means clientToRow's payload omits the key entirely,
+    // so pre-migration client edits still save instead of tripping over an
+    // unknown column. Post-migration this is exactly `|| null`.
+    qboCustomerId: 'qbo_customer_id' in r ? (r.qbo_customer_id || null) : undefined,
   };
 }
 
@@ -2193,8 +2463,23 @@ function clearBanner() { document.getElementById('globalBanner').innerHTML = '';
 /* =========================================================================
    Tabs
    ========================================================================= */
+/* Two nav tabs are merged pairs: Tracking = Time + Materials, Billing =
+   Invoice + Timesheet. Internally the four sections keep their own names —
+   showTab('time') etc. still works everywhere — and the nav maps a group
+   name to whichever sub-tab was used last (Time / Invoice by default). */
+const TAB_GROUPS = { tracking: ['time', 'materials'], billing: ['invoice', 'timesheet'] };
+const LAST_SUBTAB = { tracking: 'time', billing: 'invoice' };
+
 function showTab(name) {
-  document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  if (TAB_GROUPS[name]) name = LAST_SUBTAB[name]; // group button clicked → its last-used sub-tab
+  const group = Object.keys(TAB_GROUPS).find((g) => TAB_GROUPS[g].includes(name)) || null;
+  if (group) LAST_SUBTAB[group] = name;
+  document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name || b.dataset.tab === group));
+  const subNav = document.getElementById('subNav');
+  subNav.hidden = !group;
+  subNav.querySelectorAll('button').forEach((b) => {
+    b.style.display = group && TAB_GROUPS[group].includes(b.dataset.tab) ? '' : 'none';
+  });
   document.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('active', s.id === 'tab-' + name));
   if (name === 'overview') renderOverview();
   if (name === 'time') renderTime();
@@ -3168,7 +3453,13 @@ function wireClientsTab() {
 
     if (isEdit) {
       const idx = STATE.clients.findIndex((x) => x.id === clientEditingId);
-      STATE.clients[idx] = entry;
+      // Merge over the existing record: the form only carries the editable
+      // fields, but the in-memory client also holds accounting links
+      // (xeroContactId / qboCustomerId) that must survive an edit — the DB
+      // update above already preserves them (undefined keys are dropped
+      // from the payload), so STATE has to as well or the invoice-tab
+      // preselects silently degrade until the next reload.
+      STATE.clients[idx] = { ...STATE.clients[idx], ...entry };
     } else {
       STATE.clients.push(entry);
     }
@@ -3292,6 +3583,7 @@ function renderInvoicePreview() {
   document.getElementById('invDownloadQbCsv').disabled = !lines.length;
 
   renderInvoiceXeroSection();
+  renderInvoiceQboSection();
 }
 
 /**
@@ -3316,8 +3608,8 @@ async function renderInvoiceXeroSection() {
   if (needContacts || needItems) {
     try {
       const [contactsResult, itemsResult] = await Promise.all([
-        needContacts ? xeroApiFetch('/api/xero/contacts') : Promise.resolve(null),
-        needItems ? xeroApiFetch('/api/xero/items') : Promise.resolve(null),
+        needContacts ? apiFetch('/api/xero/contacts') : Promise.resolve(null),
+        needItems ? apiFetch('/api/xero/items') : Promise.resolve(null),
       ]);
       if (contactsResult) XERO_CONTACTS_CACHE = contactsResult.contacts;
       if (itemsResult) {
@@ -3332,12 +3624,17 @@ async function renderInvoiceXeroSection() {
 
   const contacts = XERO_CONTACTS_CACHE || [];
   const sel = document.getElementById('invXeroContact');
+  const prevContact = sel.value; // a manual pick must survive re-renders (same rule as the QBO selects)
   sel.innerHTML = '<option value="">— pick a contact —</option>' +
     contacts.map((c) => `<option value="${escapeHtml(c.contactId)}">${escapeHtml(c.name)}</option>`).join('');
-  const client = clientById(currentPreview.clientId);
-  if (client) {
-    const match = contacts.find((c) => c.name.trim().toLowerCase() === client.name.trim().toLowerCase());
-    if (match) sel.value = match.contactId;
+  if (prevContact && contacts.some((c) => c.contactId === prevContact)) {
+    sel.value = prevContact;
+  } else {
+    const client = clientById(currentPreview.clientId);
+    if (client) {
+      const match = contacts.find((c) => c.name.trim().toLowerCase() === client.name.trim().toLowerCase());
+      if (match) sel.value = match.contactId;
+    }
   }
 }
 
@@ -3346,7 +3643,7 @@ let lastCreatedXeroInvoice = null;
 /**
  * Renders a "Xero connection needs reconnecting" banner + working Reconnect
  * button into `container`. Shared by every Xero pull/write action whose
- * error has `.needsReconnect` set (see xeroApiFetch's doc comment) — the
+ * error has `.needsReconnect` set (see apiFetch's doc comment) — the
  * banner markup and click-wiring only exist here, once, instead of being
  * copy-pasted at every call site.
  */
@@ -3383,7 +3680,7 @@ async function createXeroDraftInvoice() {
   resultEl.innerHTML = '';
 
   try {
-    const result = await xeroApiFetch('/api/xero/invoices', {
+    const result = await apiFetch('/api/xero/invoices', {
       method: 'POST',
       body: {
         contactId: contactId || undefined,
@@ -3437,7 +3734,7 @@ function renderXeroInvoiceResult(inv) {
 async function syncXeroInvoiceStatus() {
   if (!lastCreatedXeroInvoice) return;
   try {
-    const result = await xeroApiFetch('/api/xero/invoice-status?ids=' + encodeURIComponent(lastCreatedXeroInvoice.invoiceId));
+    const result = await apiFetch('/api/xero/invoice-status?ids=' + encodeURIComponent(lastCreatedXeroInvoice.invoiceId));
     const fresh = result.invoices && result.invoices[0];
     if (fresh) {
       lastCreatedXeroInvoice = { ...lastCreatedXeroInvoice, ...fresh };
@@ -3461,6 +3758,165 @@ async function markPreviewInvoiced() {
   const failed = results.filter((r) => r.status === 'rejected').length;
   if (failed) {
     showBanner(`${failed} of ${currentPreview.lineItems.length} entries could not be marked invoiced — try again from the Time/Materials tab.`, 'err', 8000);
+  }
+}
+
+/**
+ * QuickBooks section of the invoice preview — twin of
+ * renderInvoiceXeroSection() above. One extra control: QuickBooks requires
+ * every invoice line to carry a Product/Service (ItemRef), so the section
+ * has a single item picker applied to all lines, defaulting to the
+ * Product/Service name configured in Settings when it matches a real item.
+ */
+async function renderInvoiceQboSection() {
+  const section = document.getElementById('invQboSection');
+  if (!section || !currentPreview) return;
+
+  if (!QBO_STATUS.connected) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  document.getElementById('invCreateQbo').disabled = !currentPreview.lineItems.length;
+
+  const needCustomers = !QBO_CUSTOMERS_CACHE;
+  const needItems = !QBO_ITEMS_CACHE;
+  if (needCustomers || needItems) {
+    try {
+      const [customersResult, itemsResult] = await Promise.all([
+        needCustomers ? apiFetch('/api/quickbooks/customers') : Promise.resolve(null),
+        needItems ? apiFetch('/api/quickbooks/items') : Promise.resolve(null),
+      ]);
+      if (customersResult) QBO_CUSTOMERS_CACHE = customersResult.customers;
+      if (itemsResult) {
+        QBO_ITEMS_CACHE = itemsResult.items;
+        renderQboProductServiceList();
+      }
+    } catch (e) {
+      console.error('Loading QuickBooks customers/items failed:', e);
+    }
+  }
+
+  const customers = QBO_CUSTOMERS_CACHE || [];
+  const custSel = document.getElementById('invQboCustomer');
+  const prevCust = custSel.value; // a manual pick must survive re-renders (same rule as the item select below)
+  custSel.innerHTML = '<option value="">— pick a customer —</option>' +
+    customers.map((c) => `<option value="${escapeHtml(c.customerId)}">${escapeHtml(c.name)}</option>`).join('');
+  if (prevCust && customers.some((c) => c.customerId === prevCust)) {
+    custSel.value = prevCust;
+  } else {
+    const client = clientById(currentPreview.clientId);
+    if (client) {
+      // Prefer the stored link from "Pull customers"; fall back to a name match.
+      const linked = client.qboCustomerId && customers.find((c) => c.customerId === client.qboCustomerId);
+      const match = linked || customers.find((c) => c.name.trim().toLowerCase() === client.name.trim().toLowerCase());
+      if (match) custSel.value = match.customerId;
+    }
+  }
+
+  const items = QBO_ITEMS_CACHE || [];
+  const itemSel = document.getElementById('invQboItem');
+  const previous = itemSel.value;
+  itemSel.innerHTML = '<option value="">— pick a product/service —</option>' +
+    items.map((it) => `<option value="${escapeHtml(it.itemId)}">${escapeHtml(it.name)}</option>`).join('');
+  if (previous && items.some((it) => it.itemId === previous)) {
+    itemSel.value = previous; // keep the user's pick across re-renders
+  } else {
+    const configured = (STATE.settings.qbProductService || '').trim().toLowerCase();
+    const preset = configured && items.find((it) => it.name.trim().toLowerCase() === configured);
+    if (preset) itemSel.value = preset.itemId;
+  }
+}
+
+let lastCreatedQboInvoice = null;
+
+async function createQboInvoice() {
+  if (!currentPreview || !currentPreview.lineItems.length) return;
+  const customerId = document.getElementById('invQboCustomer').value;
+  if (!customerId) {
+    showBanner('Pick a QuickBooks customer first.', 'err', 4000);
+    return;
+  }
+  const itemId = document.getElementById('invQboItem').value;
+  if (!itemId) {
+    showBanner('Pick a Product/Service — QuickBooks requires one on every invoice line.', 'err', 5000);
+    return;
+  }
+
+  const invDate = document.getElementById('invDate').value || todayISO();
+  const dueDate = document.getElementById('invDue').value || addDaysISO(invDate, Number(STATE.settings.termsDays) || 0);
+  const reference = document.getElementById('invReference').value.trim();
+
+  const btn = document.getElementById('invCreateQbo');
+  btn.disabled = true;
+  const resultEl = document.getElementById('invQboResult');
+  resultEl.innerHTML = '';
+
+  try {
+    const result = await apiFetch('/api/quickbooks/invoices', {
+      method: 'POST',
+      body: {
+        customerId,
+        date: invDate,
+        dueDate,
+        privateNote: reference || undefined,
+        lineItems: currentPreview.lineItems.map((l) => ({
+          description: l.description,
+          quantity: l.quantity,
+          unitAmount: l.unitAmount,
+          itemId,
+        })),
+      },
+    });
+
+    lastCreatedQboInvoice = result;
+    renderQboInvoiceResult(result);
+    showBanner(`Invoice ${result.docNumber || ''} created in QuickBooks.`, 'ok', 6000);
+
+    if (confirm('Mark these entries as invoiced now that the invoice is in QuickBooks?')) {
+      await markPreviewInvoiced();
+      renderInvoicePreview();
+      renderTime(); renderMaterials(); renderOverview(); renderClients();
+    }
+  } catch (e) {
+    if (e.needsReconnect) {
+      renderQboReconnectPrompt(resultEl, e);
+    } else {
+      showBanner('QuickBooks rejected the invoice: ' + e.message, 'err', 8000);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderQboInvoiceResult(inv) {
+  const resultEl = document.getElementById('invQboResult');
+  resultEl.innerHTML = `
+    <div class="banner ok">
+      Invoice ${escapeHtml(inv.docNumber || '')} — status: <strong>${escapeHtml(inv.status || '')}</strong>.
+      <a href="${escapeHtml(inv.deepLink)}" target="_blank" rel="noopener">Open in QuickBooks →</a>
+      <button type="button" class="link-btn" id="invQboSyncBtn">Sync status</button>
+    </div>
+  `;
+  document.getElementById('invQboSyncBtn').addEventListener('click', () => syncQboInvoiceStatus());
+}
+
+async function syncQboInvoiceStatus() {
+  if (!lastCreatedQboInvoice) return;
+  try {
+    // `today` = the USER's calendar date (en-CA formats as YYYY-MM-DD) — the
+    // server runs in UTC, and Open-vs-Overdue should flip at local midnight,
+    // not UTC midnight.
+    const result = await apiFetch('/api/quickbooks/invoice-status?ids=' + encodeURIComponent(lastCreatedQboInvoice.invoiceId)
+      + '&today=' + encodeURIComponent(new Date().toLocaleDateString('en-CA')));
+    const fresh = result.invoices && result.invoices[0];
+    if (fresh) {
+      lastCreatedQboInvoice = { ...lastCreatedQboInvoice, ...fresh };
+      renderQboInvoiceResult(lastCreatedQboInvoice);
+      showBanner('Invoice status refreshed from QuickBooks.', 'info', 3000);
+    }
+  } catch (e) {
+    showBanner('Could not refresh invoice status: ' + e.message, 'err', 6000);
   }
 }
 
@@ -3578,6 +4034,7 @@ function wireInvoiceTab() {
   });
 
   document.getElementById('invCreateXeroDraft').addEventListener('click', () => createXeroDraftInvoice());
+  document.getElementById('invCreateQbo').addEventListener('click', () => createQboInvoice());
 }
 
 /* =========================================================================
@@ -4545,6 +5002,12 @@ function wireSettingsTab() {
   document.getElementById('xeroPullAccountsBtn').addEventListener('click', () => pullXeroAccountsAndTaxTypes());
   renderXeroConnectionPanel(); // paint immediately from whatever refreshXeroStatus() already fetched at app start
 
+  document.getElementById('qboConnectBtn').addEventListener('click', () => connectQuickBooks());
+  document.getElementById('qboDisconnectBtn').addEventListener('click', () => disconnectQuickBooks());
+  document.getElementById('qboPullCustomersBtn').addEventListener('click', () => pullQboCustomers());
+  document.getElementById('qboPullItemsBtn').addEventListener('click', () => pullQboItems());
+  renderQboConnectionPanel(); // same immediate paint for QuickBooks
+
   document.getElementById('settingsForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const next = {
@@ -5030,6 +5493,7 @@ async function initApp() {
   renderAll();
   registerServiceWorker();
   refreshXeroStatus(); // not awaited — a slow/failed status check shouldn't hold up the rest of the app
+  refreshQboStatus(); // same deal for QuickBooks
 }
 
 document.addEventListener('DOMContentLoaded', initAuth);

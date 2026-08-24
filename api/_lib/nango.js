@@ -4,8 +4,26 @@ const { Nango } = require('@nangohq/node');
 
 // Nango's dashboard names the Xero integration "xero" by default — override
 // via env var if yours ends up named differently (see the Nango dashboard
-// setup step in the project's Xero integration notes).
-const XERO_INTEGRATION_ID = process.env.NANGO_XERO_INTEGRATION_ID || 'xero';
+// setup step in the project's Xero integration notes). NANGO_INTEGRATION_ID
+// is accepted as an alias because that's the name the project's .env files
+// (local and Vercel) actually use.
+const XERO_INTEGRATION_ID =
+  process.env.NANGO_XERO_INTEGRATION_ID || process.env.NANGO_INTEGRATION_ID || 'xero';
+
+// QuickBooks integration key in Nango. Nango's catalog has two QuickBooks
+// providers sharing one OAuth config: `quickbooks` (production companies,
+// api host quickbooks.api.intuit.com) and `quickbooks-sandbox` (Intuit
+// sandbox companies, api host sandbox-quickbooks.api.intuit.com). Which one
+// this app talks to is purely which integration key it names here — so
+// "switch sandbox → production" is an env-var change, not a code change.
+// Default is the production key; set NANGO_QUICKBOOKS_INTEGRATION_ID to
+// `quickbooks-sandbox` while testing against a sandbox company.
+const QUICKBOOKS_INTEGRATION_ID = process.env.NANGO_QUICKBOOKS_INTEGRATION_ID || 'quickbooks';
+
+/** True when the configured QuickBooks integration points at Intuit's sandbox — deep links must then go to app.sandbox.qbo.intuit.com. */
+function isQuickBooksSandbox() {
+  return /sandbox/i.test(QUICKBOOKS_INTEGRATION_ID);
+}
 
 let client = null;
 
@@ -37,4 +55,10 @@ function normalizeNangoError(err) {
   return { status, message, notFound: status === 404 };
 }
 
-module.exports = { getNango, XERO_INTEGRATION_ID, normalizeNangoError };
+module.exports = {
+  getNango,
+  XERO_INTEGRATION_ID,
+  QUICKBOOKS_INTEGRATION_ID,
+  isQuickBooksSandbox,
+  normalizeNangoError,
+};
