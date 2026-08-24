@@ -493,12 +493,15 @@
 <nav class="tabs" id="tabNav">
   <button data-tab="overview" class="active">Overview</button>
   <button data-tab="tracking">Tracking</button>
-  <button data-tab="clients">Clients</button>
   <button data-tab="billing">Billing</button>
+  <button data-tab="clients">Clients</button>
   <button data-tab="settings">Settings</button>
-  <!-- Sub-tabs for the merged Tracking (Time/Materials) and Billing (Invoice/Timesheet) tabs.
-       Lives inside the nav so the existing delegated click handler covers these buttons too. -->
+  <!-- Sub-tabs for the merged tabs: Overview (Summary/Reports), Tracking
+       (Time/Materials), Billing (Invoice/Timesheet). Lives inside the nav so
+       the existing delegated click handler covers these buttons too. -->
   <div class="subtabs" id="subNav" hidden>
+    <button data-tab="overview">Summary</button>
+    <button data-tab="reports">Reports</button>
     <button data-tab="time">Time</button>
     <button data-tab="materials">Materials</button>
     <button data-tab="invoice">Invoice</button>
@@ -567,6 +570,81 @@
           <tbody id="ovByClient"></tbody>
           <tfoot id="ovByClientFoot"></tfoot>
         </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORTS (Overview → Reports sub-tab) -->
+  <section class="tab" id="tab-reports">
+    <div class="section-title-row">
+      <div class="section-title">Reports</div>
+      <select id="rpPeriodSelect" class="period-select" title="Drives Client profitability and Time & margin below — Unbilled aging is always as of today">
+        <option value="week">This week</option>
+        <option value="month" selected>This month</option>
+        <option value="quarter">This quarter</option>
+        <option value="year">This year</option>
+        <option value="custom">Custom range</option>
+      </select>
+    </div>
+    <div class="period-custom-row" id="rpPeriodCustomRow">
+      <div class="field" id="rpPeriodFromField" style="display:none;">
+        <label for="rpPeriodFrom">From</label>
+        <input type="date" id="rpPeriodFrom" />
+      </div>
+      <div class="field" id="rpPeriodToField" style="display:none;">
+        <label for="rpPeriodTo">To</label>
+        <input type="date" id="rpPeriodTo" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Unbilled aging</h2>
+      <p class="muted" style="font-size:12px; margin-top:-4px;">Billable, not-yet-invoiced time &amp; materials, bucketed by how long ago the work was done. Always as of today — the money that leaks if it isn't billed.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Client</th><th class="num">≤ 30 days</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">90+</th><th class="num">Total</th></tr></thead>
+          <tbody id="rpAgingRows"></tbody>
+          <tfoot id="rpAgingFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="btn-row" style="justify-content:space-between; margin-bottom:10px;">
+        <h2 style="margin:0;">Client profitability</h2>
+        <span class="muted" id="rpProfitPeriodLabel" style="font-size:12px;"></span>
+      </div>
+      <p class="muted" style="font-size:12px; margin-top:-4px;">Billable work dated in the period, whether or not it's been invoiced yet. Revenue includes materials markup; effective rate = revenue ÷ actual hours worked.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Client</th><th class="num">Hours</th><th class="num">Revenue</th><th class="num">Eff. rate / hr</th></tr></thead>
+          <tbody id="rpProfitRows"></tbody>
+          <tfoot id="rpProfitFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="btn-row" style="justify-content:space-between; margin-bottom:10px;">
+        <h2 style="margin:0;">Time &amp; margin</h2>
+        <span class="muted" id="rpTimePeriodLabel" style="font-size:12px;"></span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="label">Billable share</div>
+          <div class="value num" id="rpBillablePct">—</div>
+          <div class="sub" id="rpBillableSub">billable hours ÷ all hours worked</div>
+        </div>
+        <div class="stat">
+          <div class="label">Rounding gain</div>
+          <div class="value num" id="rpRoundingGain">—</div>
+          <div class="sub">extra billed by increment rounding vs the raw clock</div>
+        </div>
+        <div class="stat">
+          <div class="label">Materials margin</div>
+          <div class="value num" id="rpMaterialsMargin">—</div>
+          <div class="sub" id="rpMaterialsSub">markup earned on billable materials</div>
+        </div>
       </div>
     </div>
   </section>
@@ -2463,25 +2541,39 @@ function clearBanner() { document.getElementById('globalBanner').innerHTML = '';
 /* =========================================================================
    Tabs
    ========================================================================= */
-/* Two nav tabs are merged pairs: Tracking = Time + Materials, Billing =
-   Invoice + Timesheet. Internally the four sections keep their own names —
-   showTab('time') etc. still works everywhere — and the nav maps a group
-   name to whichever sub-tab was used last (Time / Invoice by default). */
-const TAB_GROUPS = { tracking: ['time', 'materials'], billing: ['invoice', 'timesheet'] };
-const LAST_SUBTAB = { tracking: 'time', billing: 'invoice' };
+/* Three nav tabs are merged groups: Overview = Summary + Reports, Tracking =
+   Time + Materials, Billing = Invoice + Timesheet. Internally each section
+   keeps its own name — showTab('time') etc. still works everywhere — and the
+   nav maps a group name to whichever sub-tab was used last. Note 'overview'
+   is both a group name and its default member's section name; showTab's
+   group-resolution handles that shape fine (the group button and the Summary
+   pill both light up for it). */
+const TAB_GROUPS = {
+  overview: ['overview', 'reports'],
+  tracking: ['time', 'materials'],
+  billing: ['invoice', 'timesheet'],
+};
+const LAST_SUBTAB = { overview: 'overview', tracking: 'time', billing: 'invoice' };
 
 function showTab(name) {
   if (TAB_GROUPS[name]) name = LAST_SUBTAB[name]; // group button clicked → its last-used sub-tab
   const group = Object.keys(TAB_GROUPS).find((g) => TAB_GROUPS[g].includes(name)) || null;
   if (group) LAST_SUBTAB[group] = name;
-  document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name || b.dataset.tab === group));
+  // Top-level buttons match on their own name OR their group; sub-tab pills
+  // match ONLY on the exact section name. The split matters because
+  // 'overview' is both a group name and the Summary pill's section name — one
+  // shared loop would light the Summary pill up whenever any Overview
+  // sub-tab (e.g. Reports) is active.
+  document.querySelectorAll('nav.tabs > button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name || b.dataset.tab === group));
   const subNav = document.getElementById('subNav');
   subNav.hidden = !group;
   subNav.querySelectorAll('button').forEach((b) => {
     b.style.display = group && TAB_GROUPS[group].includes(b.dataset.tab) ? '' : 'none';
+    b.classList.toggle('active', b.dataset.tab === name);
   });
   document.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('active', s.id === 'tab-' + name));
   if (name === 'overview') renderOverview();
+  if (name === 'reports') renderReports();
   if (name === 'time') renderTime();
   if (name === 'materials') renderMaterials();
   if (name === 'clients') renderClients();
@@ -2579,6 +2671,184 @@ function renderOverview() {
         <td class="num" style="font-weight:700;">${formatMoney(totalUnbilledByClient)}</td>
       </tr>`;
   }
+}
+
+/* =========================================================================
+   Reports (Overview → Reports sub-tab) — pure rollups over STATE, computed
+   with the same billing helpers the Overview and invoice preview use
+   (timeEntryAmount / materialEntryAmount / periodRange), so no report can
+   disagree with what an invoice would actually bill.
+   ========================================================================= */
+// Per-visit selection, deliberately NOT persisted to settings: reports are a
+// thing you poke at ("what about last quarter?"), unlike the Overview period,
+// which is a standing preference.
+let REPORT_PERIOD = { mode: 'month', from: null, to: null };
+
+function wireReportsTab() {
+  document.getElementById('rpPeriodSelect').addEventListener('change', (e) => {
+    REPORT_PERIOD.mode = e.target.value;
+    if (e.target.value === 'custom' && !REPORT_PERIOD.from) {
+      const today = todayISO();
+      REPORT_PERIOD.from = `${today.slice(0, 7)}-01`;
+      REPORT_PERIOD.to = today;
+    }
+    renderReports();
+  });
+  document.getElementById('rpPeriodFrom').addEventListener('change', (e) => {
+    REPORT_PERIOD.from = e.target.value || null;
+    renderReports();
+  });
+  document.getElementById('rpPeriodTo').addEventListener('change', (e) => {
+    REPORT_PERIOD.to = e.target.value || null;
+    renderReports();
+  });
+}
+
+function renderReports() {
+  // --- Period control: sync the UI, compute the shared range ---
+  document.getElementById('rpPeriodSelect').value = REPORT_PERIOD.mode;
+  const isCustom = REPORT_PERIOD.mode === 'custom';
+  document.getElementById('rpPeriodFromField').style.display = isCustom ? '' : 'none';
+  document.getElementById('rpPeriodToField').style.display = isCustom ? '' : 'none';
+  document.getElementById('rpPeriodFrom').value = REPORT_PERIOD.from || '';
+  document.getElementById('rpPeriodTo').value = REPORT_PERIOD.to || '';
+
+  const range = periodRange(REPORT_PERIOD);
+  const label = periodLabel(REPORT_PERIOD, range);
+  const inRange = (date) => date >= range.from && date <= range.to;
+  const clientName = (id) => {
+    const c = clientById(id);
+    return c ? c.name : '(no client)';
+  };
+  const moneyCell = (v) => (v > 0 ? formatMoney(v) : '<span class="muted">—</span>');
+
+  // --- Unbilled aging: always as of today, ignores the period selector ---
+  const today = todayISO();
+  const ageDays = (date) => Math.floor((Date.parse(today) - Date.parse(date)) / 86400000);
+  const BUCKETS = [
+    { key: 'b30', max: 30 },
+    { key: 'b60', max: 60 },
+    { key: 'b90', max: 90 },
+    { key: 'bOld', max: Infinity },
+  ];
+  const bucketKey = (days) => BUCKETS.find((b) => days <= b.max).key;
+
+  const agingByClient = new Map();
+  const addAging = (clientId, date, amount) => {
+    if (amount <= 0) return;
+    if (!agingByClient.has(clientId)) {
+      agingByClient.set(clientId, { name: clientName(clientId), b30: 0, b60: 0, b90: 0, bOld: 0, total: 0 });
+    }
+    const row = agingByClient.get(clientId);
+    row[bucketKey(ageDays(date))] += amount;
+    row.total += amount;
+  };
+  for (const t of STATE.time) {
+    if (t.billable && !t.invoiced) addAging(t.clientId, t.date, timeEntryAmount(t));
+  }
+  for (const m of STATE.materials) {
+    if (m.billable && !m.invoiced) addAging(m.clientId, m.date, materialEntryAmount(m));
+  }
+
+  const agingRows = [...agingByClient.values()].sort((a, b) => b.total - a.total);
+  const agingBody = document.getElementById('rpAgingRows');
+  const agingFoot = document.getElementById('rpAgingFoot');
+  if (!agingRows.length) {
+    agingBody.innerHTML = '<tr class="empty-row"><td colspan="6">Nothing unbilled — everything is invoiced. 🎉</td></tr>';
+    agingFoot.innerHTML = '';
+  } else {
+    agingBody.innerHTML = agingRows.map((r) => `<tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td class="num">${moneyCell(Billing.round2(r.b30))}</td>
+        <td class="num">${moneyCell(Billing.round2(r.b60))}</td>
+        <td class="num">${moneyCell(Billing.round2(r.b90))}</td>
+        <td class="num">${moneyCell(Billing.round2(r.bOld))}</td>
+        <td class="num" style="font-weight:700;">${formatMoney(r.total)}</td>
+      </tr>`).join('');
+    const t = agingRows.reduce((s, r) => ({
+      b30: s.b30 + r.b30, b60: s.b60 + r.b60, b90: s.b90 + r.b90, bOld: s.bOld + r.bOld, total: s.total + r.total,
+    }), { b30: 0, b60: 0, b90: 0, bOld: 0, total: 0 });
+    agingFoot.innerHTML = `<tr>
+        <td style="font-weight:700;">Total</td>
+        <td class="num" style="font-weight:700;">${moneyCell(Billing.round2(t.b30))}</td>
+        <td class="num" style="font-weight:700;">${moneyCell(Billing.round2(t.b60))}</td>
+        <td class="num" style="font-weight:700;">${moneyCell(Billing.round2(t.b90))}</td>
+        <td class="num" style="font-weight:700;">${moneyCell(Billing.round2(t.bOld))}</td>
+        <td class="num" style="font-weight:700;">${formatMoney(t.total)}</td>
+      </tr>`;
+  }
+
+  // --- Client profitability: billable work dated in the period ---
+  document.getElementById('rpProfitPeriodLabel').textContent = label;
+
+  const profitByClient = new Map();
+  const profitRowFor = (clientId) => {
+    if (!profitByClient.has(clientId)) {
+      profitByClient.set(clientId, { name: clientName(clientId), minutes: 0, revenue: 0 });
+    }
+    return profitByClient.get(clientId);
+  };
+  for (const t of STATE.time) {
+    if (t.billable && inRange(t.date)) {
+      const row = profitRowFor(t.clientId);
+      row.minutes += Number(t.minutes) || 0;
+      row.revenue += timeEntryAmount(t);
+    }
+  }
+  for (const m of STATE.materials) {
+    if (m.billable && inRange(m.date)) profitRowFor(m.clientId).revenue += materialEntryAmount(m);
+  }
+
+  const profitRows = [...profitByClient.values()]
+    .filter((r) => r.revenue > 0 || r.minutes > 0)
+    .sort((a, b) => b.revenue - a.revenue);
+  const rateCell = (r) => (r.minutes > 0 ? formatMoney(r.revenue / (r.minutes / 60)) : '<span class="muted">—</span>');
+  const profitBody = document.getElementById('rpProfitRows');
+  const profitFoot = document.getElementById('rpProfitFoot');
+  if (!profitRows.length) {
+    profitBody.innerHTML = '<tr class="empty-row"><td colspan="4">No billable work in this period.</td></tr>';
+    profitFoot.innerHTML = '';
+  } else {
+    profitBody.innerHTML = profitRows.map((r) => `<tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td class="num">${formatDuration(r.minutes)}</td>
+        <td class="num">${formatMoney(r.revenue)}</td>
+        <td class="num">${rateCell(r)}</td>
+      </tr>`).join('');
+    const totals = profitRows.reduce((s, r) => ({ minutes: s.minutes + r.minutes, revenue: s.revenue + r.revenue }), { minutes: 0, revenue: 0 });
+    profitFoot.innerHTML = `<tr>
+        <td style="font-weight:700;">Total</td>
+        <td class="num" style="font-weight:700;">${formatDuration(totals.minutes)}</td>
+        <td class="num" style="font-weight:700;">${formatMoney(totals.revenue)}</td>
+        <td class="num" style="font-weight:700;">${rateCell(totals)}</td>
+      </tr>`;
+  }
+
+  // --- Time & margin stats for the period ---
+  document.getElementById('rpTimePeriodLabel').textContent = label;
+
+  const periodTime = STATE.time.filter((t) => inRange(t.date));
+  const allMinutes = periodTime.reduce((s, t) => s + (Number(t.minutes) || 0), 0);
+  const billableTime = periodTime.filter((t) => t.billable);
+  const billableMinutes = billableTime.reduce((s, t) => s + (Number(t.minutes) || 0), 0);
+  document.getElementById('rpBillablePct').textContent = allMinutes > 0 ? Math.round((billableMinutes / allMinutes) * 100) + '%' : '—';
+  document.getElementById('rpBillableSub').textContent = allMinutes > 0
+    ? `${formatDuration(billableMinutes)} of ${formatDuration(allMinutes)} worked`
+    : 'billable hours ÷ all hours worked';
+
+  // What increment rounding earned beyond the raw clock: billed amount minus
+  // (actual minutes × rate). Can be $0 (rounding off) but never negative in
+  // aggregate unless rates are, so no special casing.
+  const roundingGain = billableTime.reduce((s, t) => s + (timeEntryAmount(t) - ((Number(t.minutes) || 0) / 60) * (Number(t.rate) || 0)), 0);
+  document.getElementById('rpRoundingGain').innerHTML = allMinutes > 0 ? formatMoney(roundingGain) : '—';
+
+  const periodMaterials = STATE.materials.filter((m) => m.billable && inRange(m.date));
+  const matPrice = periodMaterials.reduce((s, m) => s + materialEntryAmount(m), 0);
+  const matCost = periodMaterials.reduce((s, m) => s + (Number(m.qty) || 0) * (Number(m.unitCost) || 0), 0);
+  document.getElementById('rpMaterialsMargin').innerHTML = periodMaterials.length ? formatMoney(matPrice - matCost) : '—';
+  document.getElementById('rpMaterialsSub').innerHTML = periodMaterials.length
+    ? `on ${formatMoney(matPrice)} of billable materials`
+    : 'markup earned on billable materials';
 }
 
 /* =========================================================================
@@ -5167,6 +5437,7 @@ function wireSettingsTab() {
    ========================================================================= */
 function renderAll() {
   renderOverview();
+  renderReports();
   renderTime();
   renderMaterials();
   renderClients();
@@ -5482,6 +5753,7 @@ async function initApp() {
   await loadState();
   wireTabNav();
   wireOverviewTab();
+  wireReportsTab();
   wireTimeTab();
   wireMaterialsTab();
   wireClientsTab();
@@ -5491,6 +5763,10 @@ async function initApp() {
   wireTimesheetTab();
   wireSettingsTab();
   renderAll();
+  // Normalize the nav for the initial tab: the markup defaults get the
+  // Overview button/section right, but its Summary/Reports pills only render
+  // through showTab(), so run it once for the same starting tab.
+  showTab('overview');
   registerServiceWorker();
   refreshXeroStatus(); // not awaited — a slow/failed status check shouldn't hold up the rest of the app
   refreshQboStatus(); // same deal for QuickBooks
