@@ -7,18 +7,19 @@
 --
 -- Expect ZERO rows back. Any row returned names a column the app's code
 -- depends on that isn't in the database yet — cross-reference the table
--- name against supabase/schema.sql, policies.sql, integrations.sql, or
--- xero_sync_columns.sql to find (and re-run) the migration that adds it.
+-- name against supabase/schema.sql, policies.sql, integrations.sql,
+-- xero_sync_columns.sql, or quickbooks_sync.sql to find (and re-run) the
+-- migration that adds it.
 -- If a whole table is missing, every one of its columns will show up here
 -- at once — that's your signal the table itself, not just a column,
 -- still needs creating.
 
 with expected(table_name, column_name) as (
   values
-    -- clients — supabase/schema.sql + xero_sync_columns.sql
+    -- clients — supabase/schema.sql + xero_sync_columns.sql + quickbooks_sync.sql
     ('clients', 'id'), ('clients', 'user_id'), ('clients', 'name'), ('clients', 'email'),
     ('clients', 'rate'), ('clients', 'increment'), ('clients', 'created_at'),
-    ('clients', 'xero_contact_id'),
+    ('clients', 'xero_contact_id'), ('clients', 'qbo_customer_id'),
 
     -- time_entries — supabase/schema.sql + xero_sync_columns.sql
     ('time_entries', 'id'), ('time_entries', 'user_id'), ('time_entries', 'client_id'),
@@ -42,10 +43,11 @@ with expected(table_name, column_name) as (
     ('settings', 'qb_product_service'), ('settings', 'time_entry_mode'), ('settings', 'overview_period'),
     ('settings', 'timesheet_period'), ('settings', 'contractor'), ('settings', 'timesheet_counter'),
 
-    -- integrations — supabase/integrations.sql
+    -- integrations — supabase/integrations.sql + quickbooks_sync.sql
     ('integrations', 'user_id'), ('integrations', 'provider'), ('integrations', 'nango_connection_id'),
     ('integrations', 'xero_tenant_id'), ('integrations', 'xero_org_name'), ('integrations', 'status'),
-    ('integrations', 'connected_at')
+    ('integrations', 'connected_at'),
+    ('integrations', 'qbo_realm_id'), ('integrations', 'qbo_company_name')
 )
 select e.table_name, e.column_name
 from expected e

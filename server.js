@@ -2,6 +2,7 @@
 
 require('dotenv').config();
 
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 
@@ -55,6 +56,36 @@ app.use((req, res, next) => {
   // denying them outright is pure hardening, not a behavior change.
   res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=()');
   next();
+});
+
+// Local mirror of Vercel's api/ filesystem routing. In production the files
+// under api/ deploy as Vercel serverless functions; this local server used to
+// serve ONLY the static frontend, so every /api/* request fell through to the
+// SPA fallback below and came back as index.html — which is exactly the
+// "did not return valid JSON" failure apiFetch() warns about. Mounting the
+// same handler files here makes `node server.js` a fully working app. The
+// handlers are plain (req, res) functions built on the express-compatible
+// subset of Vercel's API (req.method/headers/query/body, res.status().json()),
+// so they mount directly — express.json() supplies the parsed req.body that
+// Vercel provides automatically.
+app.use(express.json());
+(function mountApiDir(dir, urlBase) {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('_')) continue; // _lib is shared code, not routes
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      mountApiDir(full, `${urlBase}/${entry.name}`);
+    } else if (entry.name.endsWith('.js')) {
+      app.all(`${urlBase}/${entry.name.replace(/\.js$/, '')}`, require(full));
+    }
+  }
+})(path.join(__dirname, 'api'), '/api');
+
+// Any /api path that didn't match a mounted handler is a genuine 404 — JSON,
+// never the SPA fallback's HTML (matching how Vercel 404s unknown functions).
+app.all(['/api', '/api/*'], (req, res) => {
+  res.status(404).json({ error: 'not_found', message: `No such API route: ${req.path}` });
 });
 
 // Static frontend: the single-page app, PWA manifest, service worker, icons.
