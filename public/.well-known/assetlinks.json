@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.fabbric.weftling",
+      "sha256_cert_fingerprints": [
+        "1C:2A:5B:C4:6C:73:14:8C:1C:52:74:DE:80:6B:49:6C:4A:9B:C8:26:D8:DD:18:CD:79:2B:50:2B:AC:99:47:8A"
+      ]
+    }
+  }
+]

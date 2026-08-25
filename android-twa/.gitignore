@@ -1,0 +1,14 @@
+# Signing material — never commit. The keystore + its password live only on
+# this machine (and wherever you back them up). Losing them means future
+# updates can't be installed over the old app; leaking them lets anyone sign
+# as this app.
+weftling-signing.keystore
+signing-key-password.txt
+
+# Build outputs and Gradle caches
+app/build/
+build/
+.gradle/
+*.apk
+*.aab
+*.idsig

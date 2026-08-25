@@ -91,6 +91,11 @@ app.all(['/api', '/api/*'], (req, res) => {
 // Static frontend: the single-page app, PWA manifest, service worker, icons.
 app.use(
   express.static(path.join(__dirname, 'public'), {
+    // Serve dot-paths too: /.well-known/assetlinks.json (the Android TWA's
+    // digital asset link) lives in a dot-directory, which express.static
+    // refuses by default — Vercel serves it either way, so this keeps local
+    // behavior identical.
+    dotfiles: 'allow',
     setHeaders(res, filePath) {
       if (filePath.endsWith('manifest.webmanifest')) {
         res.setHeader('Content-Type', 'application/manifest+json');
