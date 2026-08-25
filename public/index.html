@@ -2632,9 +2632,9 @@ function renderOverview() {
   const range = overviewPeriodRange();
   const periodLabel = overviewPeriodLabel(range);
 
-  // --- Money: billed vs unbilled for the selected period, plus the standing
-  // all-time unbilled (the "what's waiting to be invoiced" number, kept so it
-  // doesn't silently vanish when the period filter hides old entries) ---
+  // --- Money: billed vs unbilled for the selected period. (An "all time
+  // unbilled" stat lived here briefly and was removed by request — the
+  // Reports sub-tab's Unbilled aging table is the standing all-time view.) ---
   document.getElementById('ovMoneyPeriodLabel').textContent = periodLabel;
 
   const inMoneyRange = (d) => d >= range.from && d <= range.to;
@@ -2649,9 +2649,6 @@ function renderOverview() {
     if (m.invoiced) billedPeriod += materialEntryAmount(m); else unbilledPeriod += materialEntryAmount(m);
   }
 
-  const totalUnbilled = STATE.clients.reduce((sum, c) => sum + unbilledAmountForClient(c.id), 0)
-    + unbilledAmountForClient(null); // entries with no client (shouldn't normally happen)
-
   document.getElementById('ovUnbilledTotal').innerHTML = `
     <div class="stat">
       <div class="label">Unbilled</div>
@@ -2662,11 +2659,6 @@ function renderOverview() {
       <div class="label">Billed</div>
       <div class="value num">${formatMoney(billedPeriod)}</div>
       <div class="sub">this period, already invoiced</div>
-    </div>
-    <div class="stat">
-      <div class="label">Unbilled · all time</div>
-      <div class="value num">${formatMoney(totalUnbilled)}</div>
-      <div class="sub">everything still waiting to be invoiced</div>
     </div>
   `;
 
