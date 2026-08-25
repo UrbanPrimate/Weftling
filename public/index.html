@@ -2558,8 +2558,13 @@ const TAB_GROUPS = {
 };
 const LAST_SUBTAB = { overview: 'overview', tracking: 'time', billing: 'invoice' };
 
-function showTab(name) {
-  if (TAB_GROUPS[name]) name = LAST_SUBTAB[name]; // group button clicked → its last-used sub-tab
+function showTab(name, opts) {
+  // A group name maps to its last-used sub-tab — but only for top-level
+  // clicks and programmatic calls. A sub-tab pill names its exact section,
+  // and for the Overview group the pill's section shares the group's name
+  // ('overview'), so mapping a pill click here would send Summary back to
+  // whichever sibling was last open instead of to Summary itself.
+  if (TAB_GROUPS[name] && !(opts && opts.fromSubTab)) name = LAST_SUBTAB[name];
   const group = Object.keys(TAB_GROUPS).find((g) => TAB_GROUPS[g].includes(name)) || null;
   if (group) LAST_SUBTAB[group] = name;
   // Top-level buttons match on their own name OR their group; sub-tab pills
@@ -5479,7 +5484,11 @@ function renderAll() {
 function wireTabNav() {
   document.getElementById('tabNav').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-tab]');
-    if (btn) showTab(btn.dataset.tab);
+    // fromSubTab matters because 'overview' names both the group and the
+    // Summary pill's section: a pill click must open exactly that section,
+    // never re-route through the group's last-used sub-tab (which, while on
+    // Reports, would bounce a Summary click straight back to Reports).
+    if (btn) showTab(btn.dataset.tab, { fromSubTab: Boolean(btn.closest('#subNav')) });
   });
 }
 
