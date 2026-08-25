@@ -191,6 +191,14 @@
     color: var(--text-muted);
     margin-top: 2px;
   }
+  /* Fine-print breakdown rows under a stat value (e.g. the Money card's
+     Time/Materials split): label left, amount right, one line each — so
+     long amounts never wrap mid-phrase. */
+  .stat .sub-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
 
   table {
     width: 100%;
@@ -2655,17 +2663,19 @@ function renderOverview() {
     if (m.invoiced) billedMatAmt += materialEntryAmount(m); else unbilledMatAmt += materialEntryAmount(m);
   }
 
-  const moneyBreakdown = (timeAmt, matAmt) => `time ${formatMoney(timeAmt)} · materials ${formatMoney(matAmt)}`;
+  const moneyBreakdown = (timeAmt, matAmt) => `
+      <div class="sub sub-row"><span>Time</span><span class="num">${formatMoney(timeAmt)}</span></div>
+      <div class="sub sub-row"><span>Materials</span><span class="num">${formatMoney(matAmt)}</span></div>`;
   document.getElementById('ovUnbilledTotal').innerHTML = `
     <div class="stat">
       <div class="label">Unbilled</div>
       <div class="value num">${formatMoney(unbilledTimeAmt + unbilledMatAmt)}</div>
-      <div class="sub">${moneyBreakdown(unbilledTimeAmt, unbilledMatAmt)}</div>
+      ${moneyBreakdown(unbilledTimeAmt, unbilledMatAmt)}
     </div>
     <div class="stat">
       <div class="label">Billed</div>
       <div class="value num">${formatMoney(billedTimeAmt + billedMatAmt)}</div>
-      <div class="sub">${moneyBreakdown(billedTimeAmt, billedMatAmt)}</div>
+      ${moneyBreakdown(billedTimeAmt, billedMatAmt)}
     </div>
   `;
 
