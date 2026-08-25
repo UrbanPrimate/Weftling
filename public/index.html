@@ -2637,28 +2637,35 @@ function renderOverview() {
   // Reports sub-tab's Unbilled aging table is the standing all-time view.) ---
   document.getElementById('ovMoneyPeriodLabel').textContent = periodLabel;
 
+  // Tracked as four buckets so the fine print under each total can break it
+  // down by where the money comes from. The card header already names the
+  // date range, so the subs don't restate it ("period" reads as a fiscal
+  // month to accounting folks anyway).
   const inMoneyRange = (d) => d >= range.from && d <= range.to;
-  let billedPeriod = 0;
-  let unbilledPeriod = 0;
+  let billedTimeAmt = 0;
+  let billedMatAmt = 0;
+  let unbilledTimeAmt = 0;
+  let unbilledMatAmt = 0;
   for (const t of STATE.time) {
     if (!t.billable || !inMoneyRange(t.date)) continue;
-    if (t.invoiced) billedPeriod += timeEntryAmount(t); else unbilledPeriod += timeEntryAmount(t);
+    if (t.invoiced) billedTimeAmt += timeEntryAmount(t); else unbilledTimeAmt += timeEntryAmount(t);
   }
   for (const m of STATE.materials) {
     if (!m.billable || !inMoneyRange(m.date)) continue;
-    if (m.invoiced) billedPeriod += materialEntryAmount(m); else unbilledPeriod += materialEntryAmount(m);
+    if (m.invoiced) billedMatAmt += materialEntryAmount(m); else unbilledMatAmt += materialEntryAmount(m);
   }
 
+  const moneyBreakdown = (timeAmt, matAmt) => `time ${formatMoney(timeAmt)} · materials ${formatMoney(matAmt)}`;
   document.getElementById('ovUnbilledTotal').innerHTML = `
     <div class="stat">
       <div class="label">Unbilled</div>
-      <div class="value num">${formatMoney(unbilledPeriod)}</div>
-      <div class="sub">this period, not yet invoiced</div>
+      <div class="value num">${formatMoney(unbilledTimeAmt + unbilledMatAmt)}</div>
+      <div class="sub">${moneyBreakdown(unbilledTimeAmt, unbilledMatAmt)}</div>
     </div>
     <div class="stat">
       <div class="label">Billed</div>
-      <div class="value num">${formatMoney(billedPeriod)}</div>
-      <div class="sub">this period, already invoiced</div>
+      <div class="value num">${formatMoney(billedTimeAmt + billedMatAmt)}</div>
+      <div class="sub">${moneyBreakdown(billedTimeAmt, billedMatAmt)}</div>
     </div>
   `;
 
