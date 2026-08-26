@@ -1,9 +1,10 @@
 'use strict';
 
 const { requireUser } = require('../_lib/supabaseUser');
-const { getNango, XERO_INTEGRATION_ID } = require('../_lib/nango');
+const { getNango, XERO_INTEGRATION_ID, connectionOwnerId } = require('../_lib/nango');
 const { xeroListConnections, normalizeXeroError } = require('../_lib/xero');
 const { withHandler, HttpError } = require('../_lib/http');
+const { enforceRateLimit } = require('../_lib/rateLimit');
 
 /**
  * POST /api/xero/finalize  { connectionId, tenantId? }
@@ -28,6 +29,7 @@ const { withHandler, HttpError } = require('../_lib/http');
  */
 module.exports = withHandler('POST', async (req, res) => {
   const { supabase, user } = await requireUser(req);
+  await enforceRateLimit(supabase, 'xero_finalize', 20, 60);
 
   const connectionId = req.body && req.body.connectionId;
   const chosenTenantId = req.body && req.body.tenantId; // present only on the follow-up call after the user picks an org
@@ -44,15 +46,8 @@ module.exports = withHandler('POST', async (req, res) => {
     throw new HttpError(502, 'nango_error', 'Could not verify the Xero connection with Nango.');
   }
 
-  // Checked both shapes defensively — `end_user` is Nango's older field,
-  // `tags` the current one; whichever this account's Nango version returns,
-  // this must match the verified caller, not a client-supplied value.
-  const ownerId =
-    (connection && connection.end_user && connection.end_user.id) ||
-    (connection && connection.tags && connection.tags.end_user_id) ||
-    null;
-
-  if (ownerId !== user.id) {
+  // Must match the verified caller, not a client-supplied value.
+  if (connectionOwnerId(connection) !== user.id) {
     throw new HttpError(403, 'forbidden', 'This connection does not belong to your account.');
   }
 

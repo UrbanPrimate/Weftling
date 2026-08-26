@@ -55,10 +55,27 @@ function normalizeNangoError(err) {
   return { status, message, notFound: status === 404 };
 }
 
+/**
+ * The Supabase user id a Nango connection was tagged with when its Connect
+ * session was minted (connect-session.js sets tags.end_user_id). Checked both
+ * shapes — `end_user` is Nango's older field, `tags` the current one. This is
+ * the ground truth for "who owns this connection", used to re-verify that a
+ * stored connection reference really belongs to the caller (finalize.js and
+ * the requireXero/QboConnection helpers).
+ */
+function connectionOwnerId(connection) {
+  return (
+    (connection && connection.end_user && connection.end_user.id) ||
+    (connection && connection.tags && connection.tags.end_user_id) ||
+    null
+  );
+}
+
 module.exports = {
   getNango,
   XERO_INTEGRATION_ID,
   QUICKBOOKS_INTEGRATION_ID,
   isQuickBooksSandbox,
+  connectionOwnerId,
   normalizeNangoError,
 };

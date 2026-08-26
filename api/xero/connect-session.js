@@ -3,6 +3,7 @@
 const { requireUser } = require('../_lib/supabaseUser');
 const { getNango, XERO_INTEGRATION_ID } = require('../_lib/nango');
 const { withHandler, HttpError } = require('../_lib/http');
+const { enforceRateLimit } = require('../_lib/rateLimit');
 
 /**
  * POST /api/xero/connect-session
@@ -17,7 +18,10 @@ const { withHandler, HttpError } = require('../_lib/http');
  * happened to complete the popup.
  */
 module.exports = withHandler('POST', async (req, res) => {
-  const { user } = await requireUser(req);
+  const { supabase, user } = await requireUser(req);
+  // Tightest limit in the app: this hits Nango with no existing connection
+  // required, so it's the cheapest thing to abuse.
+  await enforceRateLimit(supabase, 'xero_connect_session', 10, 60);
   const nango = getNango();
 
   let token;

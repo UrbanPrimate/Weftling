@@ -1,7 +1,8 @@
 'use strict';
 
-const { getNango, XERO_INTEGRATION_ID } = require('./nango');
+const { getNango, XERO_INTEGRATION_ID, connectionOwnerId } = require('./nango');
 const { HttpError } = require('./http');
+const { enforceRateLimit } = require('./rateLimit');
 
 // Every Xero Accounting API call (Contacts, Items, Accounts, TaxRates,
 // Invoices) lives under /api.xro/2.0/... . Nango's proxy for the "xero"
@@ -25,8 +26,24 @@ const XERO_ACCOUNTING_API_BASE = '/api.xro/2.0';
  *
  * Throws HttpError(409, 'not_connected') if there's no connection yet — the
  * frontend shows "connect Xero in Settings" for that code.
+ *
+ * Because every proxied Xero endpoint goes through here, this is also where
+ * two cross-cutting protections live:
+ *  - Rate limiting (per user) so one caller can't hammer the shared Nango
+ *    account through our functions.
+ *  - Ownership re-verification: the `integrations` row is client-writable
+ *    (RLS only checks user_id), so a user could forge a row pointing
+ *    nango_connection_id at SOMEONE ELSE'S connection and read their Xero
+ *    data through our proxy. finalize.js verified ownership once at connect
+ *    time, but can't stop a later direct overwrite — so we re-check with
+ *    Nango (the connection's end_user tag is immutable) before trusting the
+ *    stored id on every call. No cache: the extra getConnection is negligible
+ *    next to the Nango calls each endpoint already makes; add one (same
+ *    pattern as rate_limit_hits) if call volume ever makes it matter.
  */
 async function requireXeroConnection(supabase, user) {
+  await enforceRateLimit(supabase, 'xero_proxy', 60, 60);
+
   const { data, error } = await supabase
     .from('integrations')
     .select('nango_connection_id, xero_tenant_id, xero_org_name, status')
@@ -37,6 +54,18 @@ async function requireXeroConnection(supabase, user) {
   if (error) throw new HttpError(500, 'server_error', error.message);
   if (!data || data.status !== 'connected' || !data.xero_tenant_id) {
     throw new HttpError(409, 'not_connected', 'Not connected to Xero yet. Go to Settings and connect.');
+  }
+
+  // Re-verify the stored connection actually belongs to this user before we
+  // proxy anything with it.
+  let connection;
+  try {
+    connection = await getNango().getConnection(XERO_INTEGRATION_ID, data.nango_connection_id);
+  } catch (err) {
+    throw new HttpError(409, 'not_connected', 'Your Xero connection could not be verified. Reconnect Xero in Settings.');
+  }
+  if (connectionOwnerId(connection) !== user.id) {
+    throw new HttpError(403, 'forbidden', 'This Xero connection does not belong to your account.');
   }
 
   return {

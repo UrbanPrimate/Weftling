@@ -3,6 +3,7 @@
 const { requireUser } = require('../_lib/supabaseUser');
 const { getNango, QUICKBOOKS_INTEGRATION_ID } = require('../_lib/nango');
 const { withHandler, HttpError } = require('../_lib/http');
+const { enforceRateLimit } = require('../_lib/rateLimit');
 
 /**
  * POST /api/quickbooks/connect-session
@@ -15,7 +16,8 @@ const { withHandler, HttpError } = require('../_lib/http');
  * connection belongs to this Supabase user.
  */
 module.exports = withHandler('POST', async (req, res) => {
-  const { user } = await requireUser(req);
+  const { supabase, user } = await requireUser(req);
+  await enforceRateLimit(supabase, 'qbo_connect_session', 10, 60);
   const nango = getNango();
 
   let token;
