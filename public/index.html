@@ -1369,6 +1369,26 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Delete account</h2>
+      <p class="muted" style="font-size:12.5px; margin-top:-4px;">Permanently deletes your Weftling account and <strong>all</strong> of your data — clients, time, materials, settings, invoice records. This cannot be undone.</p>
+      <button type="button" class="btn danger" id="openDeleteAccountBtn">Delete account…</button>
+
+      <div id="deleteAccountPanel" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <p class="muted" style="font-size:12.5px;">If you've connected Xero or QuickBooks, <strong>Disconnect</strong> above first — deleting your account here removes Weftling's data but does not revoke that connection on their side.</p>
+        <div class="field">
+          <label for="deleteAccountConfirm">Type <strong>DELETE</strong> to confirm</label>
+          <input type="text" id="deleteAccountConfirm" autocomplete="off" placeholder="DELETE" />
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button type="button" class="btn secondary small" id="deleteExportFirstBtn">Export a full backup first</button>
+          <button type="button" class="btn danger" id="confirmDeleteAccountBtn" disabled>Permanently delete account</button>
+          <button type="button" class="btn secondary" id="cancelDeleteAccountBtn">Cancel</button>
+        </div>
+        <div id="deleteAccountResult" style="margin-top:8px;"></div>
+      </div>
+    </div>
   </section>
 
   <footer class="hint">Weftling · time &amp; materials, exported for your accounting software</footer>
@@ -5473,6 +5493,53 @@ function wireSettingsTab() {
       document.getElementById('resetAll').checked = RESET_CHECKBOX_IDS.every((x) => document.getElementById(x).checked);
       updateResetWarning();
     });
+  });
+
+  wireDeleteAccount();
+}
+
+/**
+ * Delete-account flow. The heavy lifting is one Supabase RPC —
+ * delete_my_account() (see supabase/account_deletion.sql), a SECURITY
+ * DEFINER function that deletes the caller's own auth.users row; the
+ * cascade foreign keys wipe every app table. The button only enables once
+ * the user types DELETE, and on success we sign out and reload to the auth
+ * screen — the account (and this session's user) no longer exists.
+ */
+function wireDeleteAccount() {
+  const panel = document.getElementById('deleteAccountPanel');
+  const confirmInput = document.getElementById('deleteAccountConfirm');
+  const confirmBtn = document.getElementById('confirmDeleteAccountBtn');
+  const resultEl = document.getElementById('deleteAccountResult');
+
+  const closePanel = () => {
+    panel.style.display = 'none';
+    confirmInput.value = '';
+    confirmBtn.disabled = true;
+    resultEl.innerHTML = '';
+  };
+
+  document.getElementById('openDeleteAccountBtn').addEventListener('click', () => { panel.style.display = ''; confirmInput.focus(); });
+  document.getElementById('cancelDeleteAccountBtn').addEventListener('click', closePanel);
+  document.getElementById('deleteExportFirstBtn').addEventListener('click', () => exportJsonBackup());
+  confirmInput.addEventListener('input', () => { confirmBtn.disabled = confirmInput.value.trim() !== 'DELETE'; });
+
+  confirmBtn.addEventListener('click', async () => {
+    if (confirmInput.value.trim() !== 'DELETE') return;
+    if (!SupabaseClient) { showBanner('Supabase isn’t configured.', 'err', 5000); return; }
+    confirmBtn.disabled = true;
+    resultEl.innerHTML = '<span class="muted" style="font-size:12.5px;">Deleting your account…</span>';
+    try {
+      const { error } = await SupabaseClient.rpc('delete_my_account');
+      if (error) throw error;
+      // The account is gone. Sign out to drop the now-orphaned session, then
+      // hard-reload to the auth screen from a completely clean slate.
+      await SupabaseClient.auth.signOut();
+      location.reload();
+    } catch (err) {
+      confirmBtn.disabled = false;
+      resultEl.innerHTML = `<div class="banner err">Could not delete your account: ${escapeHtml(err.message || 'unknown error')}. If this persists, contact support.</div>`;
+    }
   });
 }
 
