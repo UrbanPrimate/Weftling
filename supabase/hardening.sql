@@ -101,3 +101,65 @@ alter table public.clients
   add constraint clients_rate_nonneg check (rate is null or rate >= 0),
   add constraint clients_increment_pos check (increment is null or increment > 0),
   add constraint clients_name_not_blank check (char_length(trim(name)) > 0);
+
+-- ---------------------------------------------------------------------------
+-- Fix #6 (from the pre-launch review): the `anon` role's access to the app
+-- tables is never explicitly revoked — RLS is the sole confirmed backstop
+-- against unauthenticated PostgREST access.
+--
+-- The app never touches these tables as `anon`: every data read/write happens
+-- only after sign-in (the auth gate), as the `authenticated` role; sign-up
+-- and sign-in go through Supabase Auth (GoTrue), not these tables. So
+-- removing `anon`'s table privileges outright is pure defense-in-depth — if
+-- an RLS policy is ever misconfigured on a future table/change, `anon` still
+-- has nothing to fall back on. Idempotent: re-running a REVOKE is harmless.
+-- ---------------------------------------------------------------------------
+revoke all on public.clients from anon;
+revoke all on public.time_entries from anon;
+revoke all on public.materials from anon;
+revoke all on public.settings from anon;
+revoke all on public.integrations from anon;
+
+-- Forward-looking: stop future tables created by `postgres` in `public` from
+-- auto-granting to `anon` (mirrors Supabase's own hardening guidance), so a
+-- table added later via the dashboard doesn't silently reopen this.
+alter default privileges for role postgres in schema public
+  revoke select, insert, update, delete on tables from anon;
+
+-- ---------------------------------------------------------------------------
+-- Fix #7 (from the pre-launch review): the `integrations` row is
+-- client-writable (RLS lets a user insert/update their own row directly),
+-- and its columns had no shape validation. finalize.js is meant to be the
+-- only writer, but a direct API call can forge the row — so constrain what
+-- values are even storable to shrink that surface. (The deeper fix — making
+-- the row writable only through a verified server path — is tracked
+-- separately; these constraints are the cheap, immediate half.)
+--
+-- Wrapped in existence checks so this section is genuinely re-runnable
+-- (Postgres has no ADD CONSTRAINT IF NOT EXISTS for table constraints). If a
+-- check fails on ADD because an existing row violates it, that rogue row is
+-- itself the finding — inspect it before forcing the constraint.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'integrations_provider_known') then
+    alter table public.integrations
+      add constraint integrations_provider_known check (provider in ('xero', 'quickbooks'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'integrations_nango_conn_len') then
+    alter table public.integrations
+      add constraint integrations_nango_conn_len
+      check (char_length(nango_connection_id) between 1 and 255);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'integrations_xero_tenant_fmt') then
+    alter table public.integrations
+      add constraint integrations_xero_tenant_fmt
+      check (xero_tenant_id is null or
+             xero_tenant_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'integrations_qbo_realm_fmt') then
+    alter table public.integrations
+      add constraint integrations_qbo_realm_fmt
+      check (qbo_realm_id is null or qbo_realm_id ~ '^[0-9]{1,20}$');
+  end if;
+end $$;
