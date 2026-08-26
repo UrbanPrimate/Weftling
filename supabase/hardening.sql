@@ -16,8 +16,12 @@
 -- database actually allows, so the bad value can't be stored in the first
 -- place even if some future code path forgets to escape it.
 -- ---------------------------------------------------------------------------
-alter table public.settings
-  add constraint currency_symbol_len check (char_length(currency_symbol) <= 3);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'currency_symbol_len') then
+    alter table public.settings
+      add constraint currency_symbol_len check (char_length(currency_symbol) <= 3);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Fix #4 (MEDIUM): time_entries.client_id / materials.client_id aren't
@@ -85,22 +89,28 @@ create trigger check_client_ownership_materials
 -- testing) — find and fix that row first (or delete it), then re-run just
 -- the failed line.
 -- ---------------------------------------------------------------------------
-alter table public.time_entries
-  add constraint time_entries_rate_nonneg check (rate >= 0),
-  add constraint time_entries_minutes_nonneg check (minutes >= 0),
-  add constraint time_entries_increment_pos check (increment > 0),
-  add constraint time_entries_description_not_blank check (char_length(trim(description)) > 0);
-
-alter table public.materials
-  add constraint materials_qty_nonneg check (qty >= 0),
-  add constraint materials_unit_cost_nonneg check (unit_cost >= 0),
-  add constraint materials_markup_nonneg check (markup_pct >= 0),
-  add constraint materials_description_not_blank check (char_length(trim(description)) > 0);
-
-alter table public.clients
-  add constraint clients_rate_nonneg check (rate is null or rate >= 0),
-  add constraint clients_increment_pos check (increment is null or increment > 0),
-  add constraint clients_name_not_blank check (char_length(trim(name)) > 0);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'time_entries_rate_nonneg') then
+    alter table public.time_entries
+      add constraint time_entries_rate_nonneg check (rate >= 0),
+      add constraint time_entries_minutes_nonneg check (minutes >= 0),
+      add constraint time_entries_increment_pos check (increment > 0),
+      add constraint time_entries_description_not_blank check (char_length(trim(description)) > 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'materials_qty_nonneg') then
+    alter table public.materials
+      add constraint materials_qty_nonneg check (qty >= 0),
+      add constraint materials_unit_cost_nonneg check (unit_cost >= 0),
+      add constraint materials_markup_nonneg check (markup_pct >= 0),
+      add constraint materials_description_not_blank check (char_length(trim(description)) > 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clients_rate_nonneg') then
+    alter table public.clients
+      add constraint clients_rate_nonneg check (rate is null or rate >= 0),
+      add constraint clients_increment_pos check (increment is null or increment > 0),
+      add constraint clients_name_not_blank check (char_length(trim(name)) > 0);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Fix #6 (from the pre-launch review): the `anon` role's access to the app
