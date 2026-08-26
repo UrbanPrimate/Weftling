@@ -1,6 +1,6 @@
 {
   "packageId": "com.fabbric.weftling",
-  "host": "weftling.vercel.app",
+  "host": "weftling.fabbricerp.com",
   "name": "Weftling",
   "launcherName": "Weftling",
   "display": "standalone",
@@ -13,18 +13,18 @@
   "backgroundColor": "#EEF2F5",
   "enableNotifications": false,
   "startUrl": "/",
-  "iconUrl": "https://weftling.vercel.app/icons/icon-512.png",
-  "maskableIconUrl": "https://weftling.vercel.app/icons/icon-512-maskable.png",
+  "iconUrl": "https://weftling.fabbricerp.com/icons/icon-512.png",
+  "maskableIconUrl": "https://weftling.fabbricerp.com/icons/icon-512-maskable.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "./weftling-signing.keystore",
     "alias": "weftling"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 2,
+  "appVersionName": "1.0.1",
+  "appVersionCode": 3,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://weftling.vercel.app/manifest.webmanifest",
+  "webManifestUrl": "https://weftling.fabbricerp.com/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
@@ -33,7 +33,7 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://weftling.vercel.app/",
+  "fullScopeUrl": "https://weftling.fabbricerp.com/",
   "minSdkVersion": 21,
   "orientation": "portrait",
   "fingerprints": [],
@@ -43,5 +43,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1.0.0"
+  "appVersion": "1.0.1"
 }
