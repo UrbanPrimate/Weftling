@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delete your Weftling account</title>
+  <meta name="theme-color" content="#17212E" />
+  <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+  <style>
+    :root {
+      --ink: #17212E; --teal: #0E7C6B; --bg: #EEF2F5; --surface: #FFFFFF;
+      --border: #D9E0E6; --text: #17212E; --text-muted: #5B6672;
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); line-height: 1.5; }
+    header { background: var(--ink); color: #fff; padding: 16px; }
+    header .brand { font-weight: 700; letter-spacing: 0.02em; font-size: 18px; }
+    header .brand-sub { font-size: 11px; color: rgba(255,255,255,0.6); }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 22px; margin: 8px 0 16px; }
+    h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 28px 0 8px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 16px; }
+    ol, ul { padding-left: 20px; }
+    li { margin: 6px 0; }
+    a { color: var(--teal); }
+    code { background: #eef; padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+    .muted { color: var(--text-muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Weftling</div>
+    <div class="brand-sub">a Fabbric tool</div>
+  </header>
+  <main>
+    <h1>Delete your Weftling account</h1>
+    <p>You can permanently delete your Weftling account and all of its data at any time, directly from the app. This page explains how, and exactly what gets removed.</p>
+
+    <div class="card">
+      <h2>Delete from the app</h2>
+      <ol>
+        <li>Open Weftling (the Android app, or <a href="/">the web app</a>) and sign in.</li>
+        <li>Go to <strong>Settings</strong>.</li>
+        <li>Scroll to <strong>Delete account</strong> and tap <strong>Delete account…</strong></li>
+        <li>Type <code>DELETE</code> to confirm, then tap <strong>Permanently delete account</strong>.</li>
+      </ol>
+      <p class="muted">Your account is deleted immediately and you are signed out. This cannot be undone — if you want a copy of your data first, use <strong>Export a full backup</strong> on the same screen.</p>
+    </div>
+
+    <div class="card">
+      <h2>What gets deleted</h2>
+      <p>Deleting your account permanently removes, with no retention period:</p>
+      <ul>
+        <li>Your account and sign-in credentials.</li>
+        <li>All clients, time entries, materials, and settings you created.</li>
+        <li>All locally recorded invoice references.</li>
+      </ul>
+      <p class="muted">If you connected Xero or QuickBooks, use <strong>Disconnect</strong> in Settings before deleting — that revokes Weftling's access on their side. Deleting your account removes Weftling's own stored reference to the connection.</p>
+    </div>
+
+    <div class="card">
+      <h2>Can't sign in?</h2>
+      <p>If you're unable to access your account to delete it yourself, email <a href="mailto:support@fabbric.com">support@fabbric.com</a> from the address on the account and we'll delete it for you.</p>
+      <p class="muted">Replace this address with your real support contact before publishing.</p>
+    </div>
+  </main>
+</body>
+</html>
