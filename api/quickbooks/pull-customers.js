@@ -54,8 +54,13 @@ module.exports = withHandler('POST', async (req, res) => {
     }
   }
 
-  let created = 0;
-  let updated = 0;
+  // Resolve every customer to an insert or update in memory, then write in
+  // batches — same change (and reasoning) as the Xero twin: one round-trip
+  // per customer was an N+1 that risked a serverless timeout and partial
+  // sync on a large list. Matching logic is unchanged; update targets are
+  // provably unique, so upsert-by-id can't collide.
+  const toInsert = [];
+  const toUpdate = [];
 
   for (const customer of customers) {
     const nameKey = customer.name.trim().toLowerCase();
@@ -64,25 +69,22 @@ module.exports = withHandler('POST', async (req, res) => {
     const target = linked || nameMatch;
 
     if (target) {
-      const { error: updateError } = await supabase
-        .from('clients')
-        .update({ name: customer.name, email: customer.email, qbo_customer_id: customer.customerId })
-        .eq('id', target.id)
-        .eq('user_id', user.id);
-      if (updateError) throw new HttpError(500, 'server_error', updateError.message);
+      toUpdate.push({ id: target.id, user_id: user.id, name: customer.name, email: customer.email, qbo_customer_id: customer.customerId });
       if (nameMatch) byNameLower.delete(nameKey); // consumed — a later same-named customer must insert, not steal this row again
-      updated += 1;
     } else {
-      const { error: insertError } = await supabase.from('clients').insert({
-        user_id: user.id,
-        name: customer.name,
-        email: customer.email,
-        qbo_customer_id: customer.customerId,
-      });
-      if (insertError) throw new HttpError(500, 'server_error', insertError.message);
-      created += 1;
+      toInsert.push({ user_id: user.id, name: customer.name, email: customer.email, qbo_customer_id: customer.customerId });
     }
   }
 
-  res.status(200).json({ pulled: customers.length, created, updated });
+  const CHUNK = 500;
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    const { error } = await supabase.from('clients').insert(toInsert.slice(i, i + CHUNK));
+    if (error) throw new HttpError(500, 'server_error', error.message);
+  }
+  for (let i = 0; i < toUpdate.length; i += CHUNK) {
+    const { error } = await supabase.from('clients').upsert(toUpdate.slice(i, i + CHUNK), { onConflict: 'id' });
+    if (error) throw new HttpError(500, 'server_error', error.message);
+  }
+
+  res.status(200).json({ pulled: customers.length, created: toInsert.length, updated: toUpdate.length });
 });
