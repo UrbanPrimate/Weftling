@@ -3601,9 +3601,19 @@ let xlsxLoadPromise = null;
 function loadXlsx() {
   if (window.XLSX) return Promise.resolve();
   if (!xlsxLoadPromise) {
+    // Vendored SheetJS CE 0.20.3, served same-origin from /vendor/ rather than
+    // from a CDN. The old CDN copy was xlsx@0.18.5, which npm freezes forever
+    // (SheetJS left the npm registry) and which carries CVE-2023-30533
+    // (prototype pollution on read) and CVE-2024-22363 (ReDoS) — both fixed by
+    // 0.20.2+. This parser reads user-supplied .xlsx files (imports that
+    // "come from Xero/QuickBooks", i.e. often third-party), so keeping it
+    // patched and out of the CDN supply chain matters. SRI still applies to a
+    // same-origin script — a defense against edge/file tampering. To upgrade:
+    // download the new dist into public/vendor/, recompute the hash
+    // (openssl dgst -sha384 -binary <file> | openssl base64 -A), update both.
     xlsxLoadPromise = loadScript(
-      'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.mini.min.js',
-      'sha384-6fBkVFQw1YKyYpZpKf7bguegzeJqso45fTePEWGNuVaGy70fxEhICA/yswrPjW4+'
+      '/vendor/xlsx-0.20.3.mini.min.js',
+      'sha384-NG/W3xvO3ynQEcDQYIOcZTXRtwUs83cLv1FIl9PuqWPDuNhsMRF6wutlNLFwlb71'
     );
   }
   return xlsxLoadPromise;
