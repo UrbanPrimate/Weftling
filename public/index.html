@@ -1612,12 +1612,18 @@ async function connectXero() {
   hideXeroTenantPicker();
   try {
     const { token } = await apiFetch('/api/xero/connect-session', { method: 'POST' });
-    // @nangohq/frontend's built bundle exports the Nango class as the
-    // default export only (confirmed by fetching the actual jsdelivr +esm
-    // output: `export{a as AuthError,w as ConnectUI,U as default}` — no
-    // named `Nango` export exists). `import(...).Nango` is always
-    // undefined; `.default` is the real class.
-    const { default: Nango } = await import('https://cdn.jsdelivr.net/npm/@nangohq/frontend/+esm');
+    // Nango's Connect UI, vendored same-origin (public/vendor/) at pinned
+    // version 0.71.4 rather than imported from the CDN's unversioned +esm.
+    // The old `@nangohq/frontend/+esm` dynamic import ran whatever was
+    // published as `latest`, with no SRI possible on a dynamic import() — a
+    // supply-chain path to code execution in the signed-in page. The vendored
+    // bundle is self-contained (jsDelivr-bundled, no external imports) and
+    // exports the Nango class as its default export only (its exports are
+    // `{a as AuthError, w as ConnectUI, U as default}` — no named `Nango`),
+    // so `.default` is the class. To upgrade: re-download the pinned +esm
+    // (https://cdn.jsdelivr.net/npm/@nangohq/frontend@<v>/+esm) into
+    // public/vendor/ and bump the path here and in connectQuickBooks().
+    const { default: Nango } = await import('/vendor/nango-frontend-0.71.4.esm.js');
     const nango = new Nango({ connectSessionToken: token });
     nango.openConnectUI({
       onEvent: async (event) => {
@@ -1882,7 +1888,7 @@ async function connectQuickBooks() {
     const { token } = await apiFetch('/api/quickbooks/connect-session', { method: 'POST' });
     // Same lazy-loaded Nango Connect UI as connectXero() — see the comment
     // there for why `.default` (not a named export) is the class.
-    const { default: Nango } = await import('https://cdn.jsdelivr.net/npm/@nangohq/frontend/+esm');
+    const { default: Nango } = await import('/vendor/nango-frontend-0.71.4.esm.js');
     const nango = new Nango({ connectSessionToken: token });
     nango.openConnectUI({
       onEvent: async (event) => {
