@@ -1,7 +1,8 @@
 'use strict';
 
-const { getNango, QUICKBOOKS_INTEGRATION_ID, isQuickBooksSandbox } = require('./nango');
+const { getNango, QUICKBOOKS_INTEGRATION_ID, isQuickBooksSandbox, connectionOwnerId } = require('./nango');
 const { HttpError } = require('./http');
+const { enforceRateLimit } = require('./rateLimit');
 
 // Unlike Xero (where the org is an HTTP header on every call), QuickBooks
 // scopes every Accounting API call by path — /v3/company/{realmId}/... —
@@ -26,8 +27,15 @@ const QBO_MINOR_VERSION = 75;
  *
  * Throws HttpError(409, 'not_connected') if there's no connection yet — the
  * frontend shows "connect QuickBooks in Settings" for that code.
+ *
+ * Like requireXeroConnection, this is the shared choke point for every
+ * proxied QuickBooks call, so it also enforces the per-user rate limit and
+ * re-verifies that the stored connection actually belongs to the caller
+ * (the integrations row is client-writable — see that function's comment).
  */
 async function requireQboConnection(supabase, user) {
+  await enforceRateLimit(supabase, 'qbo_proxy', 60, 60);
+
   const { data, error } = await supabase
     .from('integrations')
     .select('nango_connection_id, qbo_realm_id, qbo_company_name, status')
@@ -38,6 +46,16 @@ async function requireQboConnection(supabase, user) {
   if (error) throw new HttpError(500, 'server_error', error.message);
   if (!data || data.status !== 'connected' || !data.qbo_realm_id) {
     throw new HttpError(409, 'not_connected', 'Not connected to QuickBooks yet. Go to Settings and connect.');
+  }
+
+  let connection;
+  try {
+    connection = await getNango().getConnection(QUICKBOOKS_INTEGRATION_ID, data.nango_connection_id);
+  } catch (err) {
+    throw new HttpError(409, 'not_connected', 'Your QuickBooks connection could not be verified. Reconnect QuickBooks in Settings.');
+  }
+  if (connectionOwnerId(connection) !== user.id) {
+    throw new HttpError(403, 'forbidden', 'This QuickBooks connection does not belong to your account.');
   }
 
   return {

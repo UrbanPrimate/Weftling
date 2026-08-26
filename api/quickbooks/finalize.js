@@ -1,9 +1,10 @@
 'use strict';
 
 const { requireUser } = require('../_lib/supabaseUser');
-const { getNango, QUICKBOOKS_INTEGRATION_ID } = require('../_lib/nango');
+const { getNango, QUICKBOOKS_INTEGRATION_ID, connectionOwnerId } = require('../_lib/nango');
 const { qboGet, normalizeQboError } = require('../_lib/qbo');
 const { withHandler, HttpError } = require('../_lib/http');
+const { enforceRateLimit } = require('../_lib/rateLimit');
 
 /**
  * POST /api/quickbooks/finalize  { connectionId }
@@ -26,6 +27,7 @@ const { withHandler, HttpError } = require('../_lib/http');
  */
 module.exports = withHandler('POST', async (req, res) => {
   const { supabase, user } = await requireUser(req);
+  await enforceRateLimit(supabase, 'qbo_finalize', 20, 60);
 
   const connectionId = req.body && req.body.connectionId;
   if (!connectionId || typeof connectionId !== 'string') {
@@ -41,12 +43,7 @@ module.exports = withHandler('POST', async (req, res) => {
     throw new HttpError(502, 'nango_error', 'Could not verify the QuickBooks connection with Nango.');
   }
 
-  const ownerId =
-    (connection && connection.end_user && connection.end_user.id) ||
-    (connection && connection.tags && connection.tags.end_user_id) ||
-    null;
-
-  if (ownerId !== user.id) {
+  if (connectionOwnerId(connection) !== user.id) {
     throw new HttpError(403, 'forbidden', 'This connection does not belong to your account.');
   }
 
