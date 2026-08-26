@@ -2925,7 +2925,7 @@ let swStartTs = null;
 function populateClientSelect(sel, includeAllOption) {
   const cur = sel.value;
   sel.innerHTML = (includeAllOption ? '<option value="">All clients</option>' : '<option value="" disabled selected>Select a client</option>')
-    + STATE.clients.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    + STATE.clients.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
   if (cur) sel.value = cur;
 }
 
@@ -3111,9 +3111,9 @@ function renderTime() {
       ? '<span class="pill invoiced">Invoiced</span>'
       : (t.billable ? '<span class="pill billable">Billable</span>' : '<span class="pill nonbillable">Non-billable</span>');
     const actions = t.invoiced
-      ? `<button class="link-btn" data-action="unmark-time" data-id="${t.id}">Unmark</button>`
-      : `<button class="link-btn" data-action="edit-time" data-id="${t.id}">Edit</button>
-         <button class="link-btn" data-action="delete-time" data-id="${t.id}">Delete</button>`;
+      ? `<button class="link-btn" data-action="unmark-time" data-id="${escapeHtml(t.id)}">Unmark</button>`
+      : `<button class="link-btn" data-action="edit-time" data-id="${escapeHtml(t.id)}">Edit</button>
+         <button class="link-btn" data-action="delete-time" data-id="${escapeHtml(t.id)}">Delete</button>`;
     return `<tr>
       <td>${formatDate(t.date)}</td>
       <td>${escapeHtml(c ? c.name : '—')}</td>
@@ -3376,9 +3376,9 @@ function renderMaterials() {
       ? '<span class="pill invoiced">Invoiced</span>'
       : (m.billable ? '<span class="pill billable">Billable</span>' : '<span class="pill nonbillable">Non-billable</span>');
     const actions = m.invoiced
-      ? `<button class="link-btn" data-action="unmark-mat" data-id="${m.id}">Unmark</button>`
-      : `<button class="link-btn" data-action="edit-mat" data-id="${m.id}">Edit</button>
-         <button class="link-btn" data-action="delete-mat" data-id="${m.id}">Delete</button>`;
+      ? `<button class="link-btn" data-action="unmark-mat" data-id="${escapeHtml(m.id)}">Unmark</button>`
+      : `<button class="link-btn" data-action="edit-mat" data-id="${escapeHtml(m.id)}">Edit</button>
+         <button class="link-btn" data-action="delete-mat" data-id="${escapeHtml(m.id)}">Delete</button>`;
     return `<tr>
       <td>${formatDate(m.date)}</td>
       <td>${escapeHtml(c ? c.name : '—')}</td>
@@ -3517,8 +3517,8 @@ function renderClients() {
       <td class="num">${c.increment != null && c.increment !== '' ? c.increment : '<span class="muted">default</span>'}</td>
       <td class="num">${formatMoney(unbilledAmountForClient(c.id))}</td>
       <td>
-        <button class="link-btn" data-action="edit-client" data-id="${c.id}">Edit</button>
-        <button class="link-btn" data-action="delete-client" data-id="${c.id}">Delete</button>
+        <button class="link-btn" data-action="edit-client" data-id="${escapeHtml(c.id)}">Edit</button>
+        <button class="link-btn" data-action="delete-client" data-id="${escapeHtml(c.id)}">Delete</button>
       </td>
     </tr>
   `).join('');
@@ -5787,7 +5787,18 @@ function wireAuthScreen() {
 function wireLogout() {
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     if (!SupabaseClient) return;
-    await SupabaseClient.auth.signOut();
+    const btn = document.getElementById('logoutBtn');
+    btn.disabled = true;
+    // If sign-out fails (network, etc.), the session is still in localStorage
+    // and a reload would sign the user straight back in — so don't reload on
+    // failure. Surface it and let them retry instead of silently staying
+    // logged in when they asked to leave.
+    const { error } = await SupabaseClient.auth.signOut();
+    if (error) {
+      btn.disabled = false;
+      showBanner('Could not log out: ' + error.message + ' — try again.', 'err', 6000);
+      return;
+    }
     // Full reload rather than trying to reset in-memory STATE/listeners by
     // hand: it guarantees the next sign-in starts from a completely clean
     // slate, with zero risk of one user's data lingering in memory for the

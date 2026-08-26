@@ -28,7 +28,13 @@ function withHandler(method, fn) {
       const status = err instanceof HttpError ? err.status : 500;
       const code = err instanceof HttpError ? err.code : 'server_error';
       if (status === 500) console.error(err);
-      res.status(status).json({ error: code, message: err.message || 'Something went wrong.' });
+      // Deliberate 4xx/422/502 messages (method_not_allowed, Xero/QBO
+      // reconnect guidance, validation text) are safe and useful to the
+      // client. A 500 is an unexpected internal failure whose message can
+      // carry Supabase/internal detail — log it (above) but return a fixed
+      // string so nothing internal leaks to the caller.
+      const message = status === 500 ? 'Something went wrong.' : (err.message || 'Something went wrong.');
+      res.status(status).json({ error: code, message });
     }
   };
 }
