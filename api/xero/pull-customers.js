@@ -56,8 +56,15 @@ module.exports = withHandler('POST', async (req, res) => {
     }
   }
 
-  let created = 0;
-  let updated = 0;
+  // Resolve every contact to an insert or an update in memory first, then
+  // write in batches. The old code did one round-trip per contact (an N+1
+  // that risked a serverless timeout and a half-finished sync on a large
+  // customer list); the matching logic is unchanged, only the writes are
+  // now chunked. Update targets are provably unique (a linked client is
+  // never also name-matched, and a name match is consumed on first use), so
+  // upsert-by-id can't collide.
+  const toInsert = [];
+  const toUpdate = [];
 
   for (const contact of contacts) {
     const nameKey = contact.name.trim().toLowerCase();
@@ -66,25 +73,25 @@ module.exports = withHandler('POST', async (req, res) => {
     const target = linked || nameMatch;
 
     if (target) {
-      const { error: updateError } = await supabase
-        .from('clients')
-        .update({ name: contact.name, email: contact.email, xero_contact_id: contact.contactId })
-        .eq('id', target.id)
-        .eq('user_id', user.id);
-      if (updateError) throw new HttpError(500, 'server_error', updateError.message);
+      toUpdate.push({ id: target.id, user_id: user.id, name: contact.name, email: contact.email, xero_contact_id: contact.contactId });
       if (nameMatch) byNameLower.delete(nameKey); // consumed — a later same-named contact must insert, not steal this row again
-      updated += 1;
     } else {
-      const { error: insertError } = await supabase.from('clients').insert({
-        user_id: user.id,
-        name: contact.name,
-        email: contact.email,
-        xero_contact_id: contact.contactId,
-      });
-      if (insertError) throw new HttpError(500, 'server_error', insertError.message);
-      created += 1;
+      toInsert.push({ user_id: user.id, name: contact.name, email: contact.email, xero_contact_id: contact.contactId });
     }
   }
 
-  res.status(200).json({ pulled: contacts.length, created, updated });
+  const CHUNK = 500;
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    const { error } = await supabase.from('clients').insert(toInsert.slice(i, i + CHUNK));
+    if (error) throw new HttpError(500, 'server_error', error.message);
+  }
+  // Upsert on the primary key updates the existing rows (they all exist —
+  // targets came from this user's own clients). Only the columns supplied
+  // are written, so rate/increment and other fields are left untouched.
+  for (let i = 0; i < toUpdate.length; i += CHUNK) {
+    const { error } = await supabase.from('clients').upsert(toUpdate.slice(i, i + CHUNK), { onConflict: 'id' });
+    if (error) throw new HttpError(500, 'server_error', error.message);
+  }
+
+  res.status(200).json({ pulled: contacts.length, created: toInsert.length, updated: toUpdate.length });
 });
