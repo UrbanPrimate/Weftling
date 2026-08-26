@@ -1,7 +1,7 @@
 # Weftling for Android (TWA)
 
 A Trusted Web Activity wrapper: a real Android app whose entire UI is the
-live https://weftling.vercel.app. Content updates ship by deploying the
+live https://weftling.fabbricerp.com. Content updates ship by deploying the
 website — the app is only rebuilt to change its icon, name, version, or
 other shell-level details.
 
@@ -48,7 +48,7 @@ versionCode over an existing app.
 ## The address bar
 
 The app hides Chrome's URL bar only when the site proves it belongs to the
-same owner: https://weftling.vercel.app/.well-known/assetlinks.json must be
+same owner: https://weftling.fabbricerp.com/.well-known/assetlinks.json must be
 live and list this app's package name + signing-cert SHA-256. That file is
 in the repo at `public/.well-known/assetlinks.json` — once it's deployed,
 force-stop and reopen the app and the bar disappears. Until then the app

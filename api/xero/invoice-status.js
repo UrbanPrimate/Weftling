@@ -29,12 +29,34 @@ module.exports = withHandler('GET', async (req, res) => {
   const conn = await requireXeroConnection(supabase, user);
 
   const params = { where: 'Type=="ACCREC"' };
-  if (req.query && req.query.ids) params.IDs = req.query.ids;
+
+  // Validate `ids` before forwarding to Xero, mirroring the QBO twin
+  // (api/quickbooks/invoice-status.js). Xero InvoiceIDs are GUIDs; anything
+  // else can't match an invoice, so rejecting non-GUIDs keeps arbitrary
+  // client input out of the upstream request and caps the batch size. An
+  // ids-less call is also rejected now — without it, this route would return
+  // the org's first page of ACCREC invoices, which the file's own contract
+  // ("only ids the caller already knows") says it must not.
+  const GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  const ids = String((req.query && req.query.ids) || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!ids.length) throw new HttpError(400, 'bad_request', 'ids is required (comma-separated invoice ids).');
+  if (ids.length > 50) throw new HttpError(400, 'bad_request', 'At most 50 ids per request.');
+  if (ids.some((id) => !GUID.test(id))) {
+    throw new HttpError(400, 'bad_request', 'ids must be Xero invoice GUIDs.');
+  }
+  params.IDs = ids.join(',');
 
   // Xero's API takes this as an HTTP header, not a query param.
   const extraHeaders = {};
   if (req.query && req.query.modifiedSince) {
-    extraHeaders['If-Modified-Since'] = new Date(req.query.modifiedSince).toUTCString();
+    const since = new Date(req.query.modifiedSince);
+    if (Number.isNaN(since.getTime())) {
+      throw new HttpError(400, 'bad_request', 'modifiedSince is not a valid date.');
+    }
+    extraHeaders['If-Modified-Since'] = since.toUTCString();
   }
 
   let body;
