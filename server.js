@@ -33,7 +33,7 @@ const CSP = [
   "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
-  "connect-src 'self' https://bstuqohympbcarrbbvky.supabase.co https://api.nango.dev https://connect.nango.dev",
+  "connect-src 'self' https://bstuqohympbcarrbbvky.supabase.co https://kzdbokwlwyzrtstbvjxg.supabase.co https://api.nango.dev https://connect.nango.dev",
   "frame-src https://connect.nango.dev",
   "object-src 'none'",
   "base-uri 'self'",
